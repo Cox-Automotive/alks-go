@@ -6,6 +6,8 @@ go:
 before_install:
 - go get github.com/hashicorp/go-cleanhttp
 - go get github.com/motain/gocheck
+script:
+- make test
 notifications:
   email: false
   slack:
