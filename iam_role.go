@@ -46,7 +46,7 @@ type DeleteRoleResponse struct {
 }
 
 // CreateIamRole will create a new IAM role on AWS. If no error is returned
-// then you will received a IamRoleResponse object representing the new role.
+// then you will receive a IamRoleResponse object representing the new role.
 func (c *Client) CreateIamRole(roleName string, roleType string, includeDefaultPolicies bool) (*IamRoleResponse, error) {
 	log.Printf("[INFO] Creating IAM role: %s", roleName)
 

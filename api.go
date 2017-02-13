@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/go-cleanhttp"
 )
 
+// AlksAccount is used to represent the configuration for the ALKS client
 type AlksAccount struct {
 	Username string `json:"userid"`
 	Password string `json:"password"`
@@ -18,6 +19,7 @@ type AlksAccount struct {
 	Role     string `json:"role"`
 }
 
+// Client represents an ALKS client and contains the account info and base url.
 type Client struct {
 	Account AlksAccount
 	BaseURL string
@@ -25,6 +27,7 @@ type Client struct {
 	Http *http.Client
 }
 
+// NewClient will create a new instance of the ALKS Client
 func NewClient(url string, username string, password string, account string, role string) (*Client, error) {
 	client := Client{
 		Account: AlksAccount{
@@ -40,6 +43,7 @@ func NewClient(url string, username string, password string, account string, rol
 	return &client, nil
 }
 
+// newRequest will create a new request object for API requests.
 func (c *Client) NewRequest(json []byte, method string, endpoint string) (*http.Request, error) {
 	u, err := url.Parse(c.BaseURL + endpoint)
 
@@ -59,6 +63,7 @@ func (c *Client) NewRequest(json []byte, method string, endpoint string) (*http.
 	return req, nil
 }
 
+// decodeBody will convert a http.Response object to a JSON object.
 func decodeBody(resp *http.Response, out interface{}) error {
 	body, err := ioutil.ReadAll(resp.Body)
 
@@ -73,6 +78,7 @@ func decodeBody(resp *http.Response, out interface{}) error {
 	return nil
 }
 
+// checkResp will validate a http.Response based on its status code.
 func checkResp(resp *http.Response, err error) (*http.Response, error) {
 	if err != nil {
 		return resp, err
@@ -98,4 +104,9 @@ func checkResp(resp *http.Response, err error) (*http.Response, error) {
 	default:
 		return nil, fmt.Errorf("API Error: %s", resp.Status)
 	}
+}
+
+// Durations will provide the valid session durations
+func (c *Client) Durations() []int {
+	return []int{2, 6, 12, 18}
 }
