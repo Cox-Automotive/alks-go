@@ -5,7 +5,7 @@ ALKS Golang Client
 
 This package provides the `alks` package which offers an interface to the ALKS REST API.
 
-This client deos not yet have full API coverage.
+This client does not yet have full API coverage.
 
 # Documentation
 
