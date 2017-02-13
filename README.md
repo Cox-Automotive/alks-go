@@ -3,6 +3,7 @@
 alks-go is a Go client library for accessing the ALKS API.
 
 **Documentation:** [![GoDoc](https://godoc.org/github.com/Cox-Automotive/akls-go/github?status.svg)](https://godoc.org/github.com/Cox-Automotive/alks-go)
+
 **Build Status:** [![Build Status](https://travis-ci.org/Cox-Automotive/alks-go.svg?branch=master)](https://travis-ci.org/Cox-Automotive/alks-go)  
 
 alks-go requires Go version 1.7 or greater.
