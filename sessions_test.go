@@ -28,6 +28,16 @@ func (s *S) Test_CreateSessionBadTime(c *C) {
 	c.Assert(resp, IsNil)
 }
 
+func getIndexByAccount(accounts []AccountRole, account string) (index int) {
+	for i, v := range accounts {
+		if v.Account == account {
+			return i
+		}
+	}
+
+	return -1
+}
+
 func (s *S) Test_GetAccountsPowerUser(c *C) {
 	testServer.Response(202, nil, getAccounts)
 
@@ -37,9 +47,10 @@ func (s *S) Test_GetAccountsPowerUser(c *C) {
 
 	c.Assert(err, IsNil)
 	c.Assert(resp, NotNil)
-	c.Assert(resp.Accounts[0].Account, Equals, "123456/ALKSPowerUser - foobarbaz") // make sure account name is transformed to key
-	c.Assert(resp.Accounts[0].Role, Equals, "PowerUser")
-	c.Assert(resp.Accounts[0].IamActive, Equals, false)
+	var index int = getIndexByAccount(resp.Accounts, "123456/ALKSPowerUser - foobarbaz")
+	c.Assert(resp.Accounts[index].Account, Equals, "123456/ALKSPowerUser - foobarbaz") // make sure account name is transformed to key
+	c.Assert(resp.Accounts[index].Role, Equals, "PowerUser")
+	c.Assert(resp.Accounts[index].IamActive, Equals, false)
 }
 
 func (s *S) Test_GetAccountsIAMAdmin(c *C) {
@@ -51,9 +62,10 @@ func (s *S) Test_GetAccountsIAMAdmin(c *C) {
 
 	c.Assert(err, IsNil)
 	c.Assert(resp, NotNil)
-	c.Assert(resp.Accounts[1].Account, Equals, "234567/ALKSIAMAdmin - foobarbaz2") // make sure account name is transformed to key
-	c.Assert(resp.Accounts[1].Role, Equals, "IAMAdmin")
-	c.Assert(resp.Accounts[1].IamActive, Equals, true)
+	var index int = getIndexByAccount(resp.Accounts, "234567/ALKSIAMAdmin - foobarbaz2")
+	c.Assert(resp.Accounts[index].Account, Equals, "234567/ALKSIAMAdmin - foobarbaz2") // make sure account name is transformed to key
+	c.Assert(resp.Accounts[index].Role, Equals, "IAMAdmin")
+	c.Assert(resp.Accounts[index].IamActive, Equals, true)
 }
 
 func (s *S) Test_GetAccountsAdmin(c *C) {
@@ -65,9 +77,10 @@ func (s *S) Test_GetAccountsAdmin(c *C) {
 
 	c.Assert(err, IsNil)
 	c.Assert(resp, NotNil)
-	c.Assert(resp.Accounts[2].Account, Equals, "345678/ALKSAdmin - foobarbaz3") // make sure account name is transformed to key
-	c.Assert(resp.Accounts[2].Role, Equals, "Admin")
-	c.Assert(resp.Accounts[2].IamActive, Equals, true)
+	var index int = getIndexByAccount(resp.Accounts, "345678/ALKSAdmin - foobarbaz3")
+	c.Assert(resp.Accounts[index].Account, Equals, "345678/ALKSAdmin - foobarbaz3") // make sure account name is transformed to key
+	c.Assert(resp.Accounts[index].Role, Equals, "Admin")
+	c.Assert(resp.Accounts[index].IamActive, Equals, true)
 }
 
 var sessionCreate = `
