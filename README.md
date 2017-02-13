@@ -1,10 +1,46 @@
-ALKS Golang Client
-=========
+# alks-go #
 
-[![Build Status](https://travis-ci.org/Cox-Automotive/alks-go.svg?branch=master)](https://travis-ci.org/Cox-Automotive/alks-go)
+alks-go is a Go client library for accessing the ALKS API.
 
-This package provides the `alks` package which offers an interface to the ALKS REST API.
+**Documentation:** [![GoDoc](https://godoc.org/github.com/Cox-Automotive/akls-go/github?status.svg)](https://godoc.org/github.com/Cox-Automotive/alks-go)
+**Build Status:** (https://travis-ci.org/Cox-Automotive/alks-go.svg?branch=master)](https://travis-ci.org/Cox-Automotive/alks-go)
 
-# Documentation
+alks-go requires Go version 1.7 or greater.
 
-The full documentation is availble on [Godoc](https://godoc.org/github.com/Cox-Automotive/alks-go).
+## Usage ##
+
+```go
+import "github.com/Cox-Automotive/alks-go"
+```
+
+Construct a new ALKS client, then use the various services on the client to
+access different parts of the ALKS API. For example:
+
+```go
+client, err := alks.NewClient("http://my.alks.url/rest", "username", "password", "my-acct", "my-role")
+
+// create new STS
+resp, err := client.CreateSession(2)
+
+log.Printf("Session: %v ~~ %v ~~ %v", resp.AccessKey, resp.SecretKey, resp.SessionToken)
+```
+
+Some API methods don't require an account and role to be provided.
+```go
+client, err := alks.NewClient("http://my.alks.url/rest", "username", "password", nil, nil)
+
+// list all available account/roles
+resp, err := client.GetAccounts()
+
+for _,acct := range resp.Accounts{
+    log.Printf("Account %v Role %v IAM %v", acct.Account, acct.Role, acct.IamActive)
+}
+```
+
+Unit Tests
+
+You can run the test with Make
+
+```
+make test
+```
