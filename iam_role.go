@@ -96,7 +96,7 @@ func (c *Client) CreateIamRole(roleName string, roleType string, includeDefaultP
 
 // DeleteIamRole will delete an existing IAM role from AWS. If no error is returned
 // then the deletion was successful.
-func (c *Client) DeleteIamRole(id string, meta interface{}) error {
+func (c *Client) DeleteIamRole(id string) error {
 	log.Printf("[INFO] Deleting IAM role: %s", id)
 
 	rmRole := DeleteRoleRequest{id}

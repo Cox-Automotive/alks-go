@@ -5,6 +5,7 @@ go:
   - tip
 before_install:
 - go get github.com/hashicorp/go-cleanhttp
+- go get github.com/motain/gocheck
 notifications:
   email: false
   slack:
