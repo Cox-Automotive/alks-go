@@ -21,6 +21,58 @@ type SessionResponse struct {
 	Expires         time.Time `json:"expires"`
 }
 
+// AccountRole is used to represent an ALKS account and role combination
+type AccountRole struct {
+	Account   string `json:"account"`
+	Role      string `json:"role"`
+	IamActive bool   `json:"iamKeyActive"`
+}
+
+// AccountsResponseInt is used internally to represent a collection of ALKS accounts
+type AccountsResponseInt struct {
+	Accounts map[string][]AccountRole `json:"accountListRole"`
+}
+
+// AccountsResponse is used to represent a collection of ALKS accounts
+type AccountsResponse struct {
+	Accounts []AccountRole `json:"accountListRole"`
+}
+
+func (c *Client) GetAccounts() (*AccountsResponse, error) {
+	log.Printf("[INFO] Requesting available accounts from ALKS")
+
+	b, err := json.Marshal(c.Account)
+
+	if err != nil {
+		return nil, fmt.Errorf("Error encoding account request JSON: %s", err)
+	}
+
+	req, err := c.NewRequest(b, "POST", "/getAccounts/")
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := checkResp(c.Http.Do(req))
+	if err != nil {
+		return nil, err
+	}
+
+	_accts := new(AccountsResponseInt)
+	err = decodeBody(resp, &_accts)
+
+	if err != nil {
+		return nil, fmt.Errorf("Error parsing session create response: %s", err)
+	}
+
+	accts := new(AccountsResponse)
+	for k, v := range _accts.Accounts {
+		v[0].Account = k
+		accts.Accounts = append(accts.Accounts, v[0])
+	}
+
+	return accts, nil
+}
+
 // CreateSession will create a new STS session on AWS. If no error is
 // returned then you will receive a SessionResponse object representing
 // your STS session.

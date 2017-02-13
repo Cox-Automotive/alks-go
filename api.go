@@ -27,7 +27,8 @@ type Client struct {
 	Http *http.Client
 }
 
-// NewClient will create a new instance of the ALKS Client
+// NewClient will create a new instance of the ALKS Client. If you don't yet know the account/role
+// pass them as nil and then invoke GetAccounts().
 func NewClient(url string, username string, password string, account string, role string) (*Client, error) {
 	client := Client{
 		Account: AlksAccount{
