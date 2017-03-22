@@ -8,7 +8,7 @@ import (
 func (s *S) Test_CreateSession(c *C) {
 	testServer.Response(202, nil, sessionCreate)
 
-	resp, err := s.client.CreateSession(2)
+	resp, err := s.client.CreateSession(2, false)
 
 	_ = testServer.WaitRequest()
 
@@ -22,10 +22,26 @@ func (s *S) Test_CreateSession(c *C) {
 }
 
 func (s *S) Test_CreateSessionBadTime(c *C) {
-	resp, err := s.client.CreateSession(1)
+	resp, err := s.client.CreateSession(42, false)
 
 	c.Assert(err, NotNil)
 	c.Assert(resp, IsNil)
+}
+
+func (s *S) Test_CreateSessionIam(c *C) {
+	testServer.Response(202, nil, sessionCreate)
+
+	resp, err := s.client.CreateSession(1, true)
+
+	_ = testServer.WaitRequest()
+
+	c.Assert(err, IsNil)
+	c.Assert(resp, NotNil)
+	c.Assert(resp.AccessKey, Equals, "foo")
+	c.Assert(resp.SecretKey, Equals, "bar")
+	c.Assert(resp.SessionToken, Equals, "baz")
+	c.Assert(resp.SessionDuration, Equals, 1)
+	c.Assert(resp.Expires.After(time.Now()), Equals, true)
 }
 
 func getIndexByAccount(accounts []AccountRole, account string) (index int) {
