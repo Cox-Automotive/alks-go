@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"regexp"
 )
 
 // IamRoleRequqest is used to represent a new IAM Role request.
@@ -177,5 +178,21 @@ func (c *Client) GetIamRole(roleName string) (*IamRoleResponse, error) {
 		return nil, nil
 	}
 
+	// This is here because ALKS returns a string representation of a Java array 
+	// with the only entry being the instance profile ARN (ie: "[\"ARN\"]")
+	// A simple regex fixes the formatting issue and using existing instance 
+	// profiles works again. Every IAM role doesn't return an instance profile,
+	// so we have to make sure the string isn't empty.
+	if len(cr.RoleIPArn) > 0 {
+		re := regexp.MustCompile("^\\[\\\"(.+)\\\"\\]$")
+		matches := re.FindStringSubmatch(cr.RoleIPArn)
+		if len(matches) > 1{
+			cr.RoleIPArn = matches[1]
+		} else {
+			// The response from ALKS isn't what we expect. Has it been fixed?
+			return nil, fmt.Errorf("Error parsing Instance Profile ARN: %s", cr.RoleIPArn)
+		}
+	}
+	
 	return cr, nil
 }
