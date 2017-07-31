@@ -175,7 +175,7 @@ func (c *Client) GetIamRole(roleName string) (*IamRoleResponse, error) {
 	}
 
 	if !cr.Exists {
-		return nil, nil
+		return nil, fmt.Errorf("Role does not exist.")
 	}
 
 	// This is here because ALKS returns a string representation of a Java array
