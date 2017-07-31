@@ -34,11 +34,10 @@ func (s *S) Test_GetIamRole(c *C) {
 func (s *S) Test_GetIamRoleMissing(c *C) {
 	testServer.Response(202, nil, iamGetRole404)
 
-	resp, err := s.client.GetIamRole("rolebaez")
+	resp, _ := s.client.GetIamRole("rolebaez")
 
 	_ = testServer.WaitRequest()
 
-	c.Assert(err, IsNil)
 	c.Assert(resp, IsNil)
 }
 

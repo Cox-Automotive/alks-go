@@ -110,6 +110,7 @@ var sessionCreate = `
 // this mapping is so dumb..
 var getAccounts = `
 {
+	"StatusMessage": "Success",
 	"accountListRole": {
 		"123456/ALKSPowerUser - foobarbaz": [
 		{
