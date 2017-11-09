@@ -52,3 +52,5 @@ func TestClient_NewRequest(t *testing.T) {
 		t.Fatalf("bad method: %v", req.Method)
 	}
 }
+
+// TODO: tests for STS functionality
