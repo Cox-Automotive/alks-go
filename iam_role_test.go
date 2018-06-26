@@ -17,6 +17,19 @@ func (s *S) Test_CreateIamRole(c *C) {
 	c.Assert(resp.RoleType, Equals, "Admin")
 }
 
+func (s *S) Test_CreateIamTrustRole(c *C) {
+	testServer.Response(202, nil, iamGetRole)
+
+	resp, err := s.client.CreateIamTrustRole("rolebae", "Cross Account", "arn:aws:iam::123456789123:role/test-role")
+
+	_ = testServer.WaitRequest()
+
+	c.Assert(err, IsNil)
+	c.Assert(resp, NotNil)
+	c.Assert(resp.RoleName, Equals, "rolebae")
+	c.Assert(resp.RoleType, Equals, "Cross Account")
+}
+
 func (s *S) Test_GetIamRole(c *C) {
 	testServer.Response(202, nil, iamGetRole)
 
