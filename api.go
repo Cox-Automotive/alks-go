@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/hashicorp/go-cleanhttp"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+
+	"github.com/hashicorp/go-cleanhttp"
 )
 
 // AlksAccount is used to represent the configuration for the ALKS client
@@ -24,6 +25,8 @@ type AlksSTS struct {
 	AccessKey string `json:"accessKey"`
 	SecretKey string `json:"secretKey"`
 	Token     string `json:"sessionToken"`
+	Account   string `json:"account"`
+	Role      string `json:"role"`
 }
 
 // Client represents an ALKS client and contains the account info and base url.
@@ -54,13 +57,15 @@ func NewClient(url string, username string, password string, account string, rol
 }
 
 // NewSTSClient will create a new instance of the ALKS Client using STS tokens.
-func NewSTSClient(url string, accessKey string, secretKey string, token string) (*Client, error) {
+func NewSTSClient(url string, accessKey string, secretKey string, token string, account string, role string) (*Client, error) {
 	client := Client{
 		Account: AlksAccount{},
 		STS: AlksSTS{
 			AccessKey: accessKey,
 			SecretKey: secretKey,
 			Token:     token,
+			Account:   account,
+			Role:      role,
 		},
 		BaseURL: url,
 		Http:    cleanhttp.DefaultClient(),
