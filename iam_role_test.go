@@ -7,7 +7,7 @@ import (
 func (s *S) Test_CreateIamRole(c *C) {
 	testServer.Response(202, nil, iamGetRole)
 
-	resp, err := s.client.CreateIamRole("rolebae", "Admin", false)
+	resp, err := s.client.CreateIamRole("rolebae", "Admin", false, false)
 
 	_ = testServer.WaitRequest()
 
@@ -20,7 +20,7 @@ func (s *S) Test_CreateIamRole(c *C) {
 func (s *S) Test_CreateIamTrustRole(c *C) {
 	testServer.Response(202, nil, iamGetTrustRole)
 
-	resp, err := s.client.CreateIamTrustRole("test-cross-role", "Cross Account", "arn:aws:iam::123456789123:role/test-role")
+	resp, err := s.client.CreateIamTrustRole("test-cross-role", "Cross Account", "arn:aws:iam::123456789123:role/test-role", false)
 
 	_ = testServer.WaitRequest()
 
