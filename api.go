@@ -35,6 +35,22 @@ type Client struct {
 	Http *http.Client
 }
 
+// Represents the response from ALKS containing information about a login role
+type LoginRoleResponse struct {
+	Errors        []string  `json:"errors"`
+	StatusMessage string    `json:"statusMessage"`
+	RequestId     string    `json:"requestId"`
+	LoginRole     LoginRole `json:"loginRole"`
+}
+
+// Represents information about a login role
+type LoginRole struct {
+	Account        string `json:"account"`
+	IamKeyActive   bool   `json:"iamKeyActive"`
+	MaxKeyDuration int    `json:"maxKeyDuration"`
+	Role           string `json:"role"`
+}
+
 // NewClient will create a new instance of the ALKS Client. If you don't yet know the account/role
 // pass them as nil and then invoke GetAccounts().
 func NewClient(url string, username string, password string, account string, role string) (*Client, error) {
@@ -146,6 +162,42 @@ func checkResp(resp *http.Response, err error) (*http.Response, error) {
 }
 
 // Durations will provide the valid session durations
-func (c *Client) Durations() []int {
-	return []int{1, 2, 6, 12, 18}
+func (c *Client) Durations() ([]int, error) {
+	log.Printf("[INFO] Requesting allowed durations from ALKS")
+
+	// Use .../me endpoint for getting durations if using STS credentials
+	var path string
+	if len(strings.TrimSpace(c.Account.Account)) > 0 {
+		accountId := c.Account.Account[0:12]
+		path = fmt.Sprintf("/loginRoles/id/%v/%v", accountId, c.Account.Role)
+	} else {
+		path = "/loginRoles/id/me"
+	}
+
+	req, err := c.NewRequest(nil, "GET", path)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := checkResp(c.Http.Do(req))
+	if err != nil {
+		return nil, err
+	}
+
+	r := new(LoginRoleResponse)
+	err := decodeBody(resp, &r)
+	if err != nil {
+		return nil, fmt.Errorf("Error parsing LoginRole response: %s", err)
+	}
+
+	if len(r.Errors) > 0 {
+		return nil, fmt.Errorf("Error fetching role information: %s", strings.Join(cr.Errors[:], ", "))
+	}
+
+	maxDuration := r.LoginRole.MaxKeyDuration
+	var durations [maxDuration]int
+	for i := 0; i < maxDuration; i++ {
+		durations[i] = i + 1
+	}
+	return durations, nil
 }
