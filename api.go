@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 )
 
 // AlksAccount is used to represent the configuration for the ALKS client
@@ -184,18 +185,18 @@ func (c *Client) Durations() ([]int, error) {
 		return nil, err
 	}
 
-	r := new(LoginRoleResponse)
-	err := decodeBody(resp, &r)
+	lrr := new(LoginRoleResponse)
+	err = decodeBody(resp, &lrr)
 	if err != nil {
 		return nil, fmt.Errorf("Error parsing LoginRole response: %s", err)
 	}
 
-	if len(r.Errors) > 0 {
-		return nil, fmt.Errorf("Error fetching role information: %s", strings.Join(cr.Errors[:], ", "))
+	if len(lrr.Errors) > 0 {
+		return nil, fmt.Errorf("Error fetching role information: %s", strings.Join(lrr.Errors[:], ", "))
 	}
 
-	maxDuration := r.LoginRole.MaxKeyDuration
-	var durations [maxDuration]int
+	maxDuration := lrr.LoginRole.MaxKeyDuration
+	durations := make([]int, maxDuration)
 	for i := 0; i < maxDuration; i++ {
 		durations[i] = i + 1
 	}
