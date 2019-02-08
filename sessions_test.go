@@ -6,10 +6,12 @@ import (
 )
 
 func (s *S) Test_CreateSession(c *C) {
+	testServer.Response(200, nil, getNonIamLoginRoleResponse)
 	testServer.Response(202, nil, sessionCreate)
 
 	resp, err := s.client.CreateSession(2, false)
 
+	_ = testServer.WaitRequest()
 	_ = testServer.WaitRequest()
 
 	c.Assert(err, IsNil)
@@ -22,17 +24,23 @@ func (s *S) Test_CreateSession(c *C) {
 }
 
 func (s *S) Test_CreateSessionBadTime(c *C) {
+	testServer.Response(200, nil, getNonIamLoginRoleResponse)
+
 	resp, err := s.client.CreateSession(42, false)
+
+	_ = testServer.WaitRequest()
 
 	c.Assert(err, NotNil)
 	c.Assert(resp, IsNil)
 }
 
 func (s *S) Test_CreateSessionIam(c *C) {
+	testServer.Response(200, nil, getNonIamLoginRoleResponse)
 	testServer.Response(202, nil, sessionCreate)
 
 	resp, err := s.client.CreateSession(1, true)
 
+	_ = testServer.WaitRequest()
 	_ = testServer.WaitRequest()
 
 	c.Assert(err, IsNil)
@@ -134,5 +142,18 @@ var getAccounts = `
 		}
 		]
 	}
+}
+`
+
+var getNonIamLoginRoleResponse = `
+{
+		"requestId": "abcd1234",
+		"statusMessage": "Success",
+		"loginRole": {
+				"account": "012345678910/ALKSAdmin",
+				"role": "Admin",
+				"iamKeyActive": true,
+				"maxKeyDuration": 36
+		}
 }
 `
