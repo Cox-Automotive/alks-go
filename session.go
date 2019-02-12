@@ -135,11 +135,6 @@ func (c *Client) CreateSession(sessionDuration int, useIAM bool) (*SessionRespon
 		return nil, fmt.Errorf("Error parsing session create response: %s", err)
 	}
 
-	// Most API responses that are 401 include a JSON body with error messages. getKeys & getIAMKeys do not
-	if len(sr.AccessKey) == 0 {
-		return nil, fmt.Errorf("please validate username/password and account/role")
-	}
-
 	if sr.RequestFailed() {
 		return nil, fmt.Errorf("Error creating session: %s", strings.Join(sr.GetErrors(), ", "))
 	}
