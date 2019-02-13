@@ -6,7 +6,6 @@ import (
 
 func makeClient(t *testing.T) *Client {
 	client, err := NewClient("http://foo.bar.com", "brian", "pass", "acct", "role")
-
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -15,20 +14,16 @@ func makeClient(t *testing.T) *Client {
 		t.Fatalf("base url not set on client: %s", client.BaseURL)
 	}
 
-	if client.Account.Username != "brian" {
-		t.Fatalf("account username not set on client: %s", client.Account.Username)
+	if client.Credentials == nil {
+		t.Fatalf("credentials not set on client")
 	}
 
-	if client.Account.Password != "pass" {
-		t.Fatalf("account password not set on client: %s", client.Account.Password)
+	if client.AccountDetails.Account != "acct" {
+		t.Fatalf("account account not set on client: %s", client.AccountDetails.Account)
 	}
 
-	if client.Account.Account != "acct" {
-		t.Fatalf("account account not set on client: %s", client.Account.Account)
-	}
-
-	if client.Account.Role != "role" {
-		t.Fatalf("account role not set on client: %s", client.Account.Role)
+	if client.AccountDetails.Role != "role" {
+		t.Fatalf("account role not set on client: %s", client.AccountDetails.Role)
 	}
 
 	return client
@@ -50,6 +45,10 @@ func TestClient_NewRequest(t *testing.T) {
 
 	if req.Method != "POST" {
 		t.Fatalf("bad method: %v", req.Method)
+	}
+
+	if _, _, ok := req.BasicAuth(); !ok {
+		t.Fatalf("basic auth header missing")
 	}
 }
 
