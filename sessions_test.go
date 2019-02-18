@@ -1,8 +1,9 @@
 package alks
 
 import (
-	. "github.com/motain/gocheck"
 	"time"
+
+	. "github.com/motain/gocheck"
 )
 
 func (s *S) Test_CreateSession(c *C) {
@@ -71,7 +72,7 @@ func (s *S) Test_GetAccountsPowerUser(c *C) {
 
 	c.Assert(err, IsNil)
 	c.Assert(resp, NotNil)
-	var index int = getIndexByAccount(resp.Accounts, "123456/ALKSPowerUser - foobarbaz")
+	var index = getIndexByAccount(resp.Accounts, "123456/ALKSPowerUser - foobarbaz")
 	c.Assert(resp.Accounts[index].Account, Equals, "123456/ALKSPowerUser - foobarbaz") // make sure account name is transformed to key
 	c.Assert(resp.Accounts[index].Role, Equals, "PowerUser")
 	c.Assert(resp.Accounts[index].IamActive, Equals, false)
@@ -86,7 +87,7 @@ func (s *S) Test_GetAccountsIAMAdmin(c *C) {
 
 	c.Assert(err, IsNil)
 	c.Assert(resp, NotNil)
-	var index int = getIndexByAccount(resp.Accounts, "234567/ALKSIAMAdmin - foobarbaz2")
+	var index = getIndexByAccount(resp.Accounts, "234567/ALKSIAMAdmin - foobarbaz2")
 	c.Assert(resp.Accounts[index].Account, Equals, "234567/ALKSIAMAdmin - foobarbaz2") // make sure account name is transformed to key
 	c.Assert(resp.Accounts[index].Role, Equals, "IAMAdmin")
 	c.Assert(resp.Accounts[index].IamActive, Equals, true)
@@ -101,7 +102,7 @@ func (s *S) Test_GetAccountsAdmin(c *C) {
 
 	c.Assert(err, IsNil)
 	c.Assert(resp, NotNil)
-	var index int = getIndexByAccount(resp.Accounts, "345678/ALKSAdmin - foobarbaz3")
+	var index = getIndexByAccount(resp.Accounts, "345678/ALKSAdmin - foobarbaz3")
 	c.Assert(resp.Accounts[index].Account, Equals, "345678/ALKSAdmin - foobarbaz3") // make sure account name is transformed to key
 	c.Assert(resp.Accounts[index].Role, Equals, "Admin")
 	c.Assert(resp.Accounts[index].IamActive, Equals, true)
