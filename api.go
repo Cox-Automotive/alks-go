@@ -168,11 +168,15 @@ func (c *Client) Durations() ([]int, error) {
 	lrr := new(LoginRoleResponse)
 	err = decodeBody(resp, &lrr)
 	if err != nil {
+		if reqID := GetRequestID(resp); reqID != "" {
+			return nil, fmt.Errorf("Error parsing LoginRole response: [%s] %s", reqID, err)
+		}
+
 		return nil, fmt.Errorf("Error parsing LoginRole response: %s", err)
 	}
 
 	if lrr.RequestFailed() {
-		return nil, fmt.Errorf("Error fetching role information: %s", strings.Join(lrr.GetErrors(), ", "))
+		return nil, fmt.Errorf("Error fetching role information: [%s] %s", lrr.BaseResponse.RequestID, strings.Join(lrr.GetErrors(), ", "))
 	}
 
 	maxDuration := lrr.LoginRole.MaxKeyDuration
