@@ -65,11 +65,15 @@ func (c *Client) GetAccounts() (*AccountsResponse, error) {
 	err = decodeBody(resp, &_accts)
 
 	if err != nil {
+		if reqID := GetRequestID(resp); reqID != "" {
+			return nil, fmt.Errorf("Error parsing get accounts response: [%s] %s", reqID, err)
+		}
+
 		return nil, fmt.Errorf("Error parsing get accounts response: %s", err)
 	}
 
 	if _accts.RequestFailed() {
-		return nil, fmt.Errorf("Error getting accounts : %s", strings.Join(_accts.GetErrors(), ", "))
+		return nil, fmt.Errorf("Error getting accounts : [%s] %s", _accts.BaseResponse.RequestID, strings.Join(_accts.GetErrors(), ", "))
 	}
 
 	accts := new(AccountsResponse)
@@ -132,11 +136,15 @@ func (c *Client) CreateSession(sessionDuration int, useIAM bool) (*SessionRespon
 	err = decodeBody(resp, &sr)
 
 	if err != nil {
+		if reqID := GetRequestID(resp); reqID != "" {
+			return nil, fmt.Errorf("Error parsing session create response: [%s] %s", reqID, err)
+		}
+
 		return nil, fmt.Errorf("Error parsing session create response: %s", err)
 	}
 
 	if sr.RequestFailed() {
-		return nil, fmt.Errorf("Error creating session: %s", strings.Join(sr.GetErrors(), ", "))
+		return nil, fmt.Errorf("Error creating session: [%s] %s", sr.BaseResponse.RequestID, strings.Join(sr.GetErrors(), ", "))
 	}
 
 	sr.Expires = time.Now().Local().Add(time.Hour * time.Duration(sessionDuration))
