@@ -26,7 +26,8 @@ type Client struct {
 	AccountDetails AccountDetails
 	BaseURL        string
 
-	http *http.Client
+	http      *http.Client
+	userAgent string
 }
 
 // LoginRoleResponse represents the response from ALKS containing information about a login role
@@ -53,6 +54,7 @@ func NewClient(url string, username string, password string, account string, rol
 		AccountDetails: AccountDetails{Account: account, Role: role},
 		BaseURL:        url,
 		http:           cleanhttp.DefaultClient(),
+		userAgent:      "alks-go",
 	}
 
 	return &client, nil
@@ -65,6 +67,7 @@ func NewSTSClient(url string, accessKey string, secretKey string, token string) 
 		Credentials: &creds,
 		BaseURL:     url,
 		http:        cleanhttp.DefaultClient(),
+		userAgent:   "alks-go",
 	}
 
 	return &client, nil
@@ -79,9 +82,19 @@ func NewBearerTokenClient(url string, bearerToken string, account string, role s
 		AccountDetails: AccountDetails{Account: account, Role: role},
 		BaseURL:        url,
 		http:           cleanhttp.DefaultClient(),
+		userAgent:      "alks-go",
 	}
 
 	return &client, nil
+}
+
+// SetUserAgent sets the client user agent in order to report tool details to ALKS
+func (c *Client) SetUserAgent(userAgent string) {
+	if userAgent == "" {
+		return
+	}
+
+	c.userAgent = userAgent
 }
 
 // NewRequest will create a new request object for API requests.
@@ -99,7 +112,7 @@ func (c *Client) NewRequest(json []byte, method string, endpoint string) (*http.
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "alks-go")
+	req.Header.Set("User-Agent", c.userAgent)
 	err = c.Credentials.InjectAuth(req)
 
 	if err != nil {
