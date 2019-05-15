@@ -31,6 +31,7 @@ func makeClient(t *testing.T) *Client {
 
 func TestClient_NewRequest(t *testing.T) {
 	c := makeClient(t)
+	c.SetUserAgent("test-value")
 
 	json := []byte(`{"fooz":"barz"}`)
 
@@ -41,6 +42,10 @@ func TestClient_NewRequest(t *testing.T) {
 
 	if req.URL.String() != "http://foo.bar.com/endpointfun" {
 		t.Fatalf("bad base url: %v", req.URL.String())
+	}
+
+	if req.UserAgent() != "test-value" {
+		t.Fatalf("bad user-agent: %v", req.UserAgent())
 	}
 
 	if req.Method != "POST" {
