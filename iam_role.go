@@ -95,11 +95,15 @@ func (c *Client) CreateIamRole(roleName string, roleType string, includeDefaultP
 	err = decodeBody(resp, &cr)
 
 	if err != nil {
+		if reqID := GetRequestID(resp); reqID != "" {
+			return nil, fmt.Errorf("Error parsing CreateRole response: [%s] %s", reqID, err)
+		}
+
 		return nil, fmt.Errorf("Error parsing CreateRole response: %s", err)
 	}
 
 	if cr.RequestFailed() {
-		return nil, fmt.Errorf("Error creating role: %s", strings.Join(cr.GetErrors(), ", "))
+		return nil, fmt.Errorf("Error creating role: [%s] %s", cr.BaseResponse.RequestID, strings.Join(cr.GetErrors(), ", "))
 	}
 
 	return cr, nil
@@ -140,11 +144,15 @@ func (c *Client) CreateIamTrustRole(roleName string, roleType string, trustArn s
 	err = decodeBody(resp, &cr)
 
 	if err != nil {
+		if reqID := GetRequestID(resp); reqID != "" {
+			return nil, fmt.Errorf("Error parsing CreateTrustRole response: [%s] %s", reqID, err)
+		}
+
 		return nil, fmt.Errorf("Error parsing CreateTrustRole response: %s", err)
 	}
 
 	if cr.RequestFailed() {
-		return nil, fmt.Errorf("Error creating trust role: %s", strings.Join(cr.GetErrors(), ", "))
+		return nil, fmt.Errorf("Error creating trust role: [%s] %s", cr.BaseResponse.RequestID, strings.Join(cr.GetErrors(), ", "))
 	}
 
 	return cr, nil
@@ -180,12 +188,16 @@ func (c *Client) DeleteIamRole(id string) error {
 	err = decodeBody(resp, &del)
 
 	if err != nil {
+		if reqID := GetRequestID(resp); reqID != "" {
+			return fmt.Errorf("Error parsing DeleteRole response: [%s] %s", reqID, err)
+		}
+
 		return fmt.Errorf("Error parsing DeleteRole response: %s", err)
 	}
 
 	// TODO you get an error if you delete an already deleted role, need to revist for checking fail/success
 	if del.RequestFailed() {
-		return fmt.Errorf("Error deleting role: %s", strings.Join(del.GetErrors(), ", "))
+		return fmt.Errorf("Error deleting role: [%s] %s", del.BaseResponse.RequestID, strings.Join(del.GetErrors(), ", "))
 	}
 
 	return nil
@@ -222,15 +234,19 @@ func (c *Client) GetIamRole(roleName string) (*IamRoleResponse, error) {
 	err = decodeBody(resp, &cr)
 
 	if err != nil {
+		if reqID := GetRequestID(resp); reqID != "" {
+			return nil, fmt.Errorf("Error parsing GetRole response: [%s] %s", reqID, err)
+		}
+
 		return nil, fmt.Errorf("Error parsing GetRole response: %s", err)
 	}
 
 	if cr.RequestFailed() {
-		return nil, fmt.Errorf("Error getting role: %s", strings.Join(cr.GetErrors(), ", "))
+		return nil, fmt.Errorf("Error getting role: [%s] %s", cr.BaseResponse.RequestID, strings.Join(cr.GetErrors(), ", "))
 	}
 
 	if !cr.Exists {
-		return nil, fmt.Errorf("role does not exist")
+		return nil, fmt.Errorf("[%s] Role does not exist", cr.BaseResponse.RequestID)
 	}
 
 	// This is here because ALKS returns a string representation of a Java array
