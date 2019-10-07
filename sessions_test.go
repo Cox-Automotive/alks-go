@@ -76,6 +76,7 @@ func (s *S) Test_GetAccountsPowerUser(c *C) {
 	c.Assert(resp.Accounts[index].Account, Equals, "123456/ALKSPowerUser - foobarbaz") // make sure account name is transformed to key
 	c.Assert(resp.Accounts[index].Role, Equals, "PowerUser")
 	c.Assert(resp.Accounts[index].IamActive, Equals, false)
+	c.Assert(resp.Accounts[index].SkypieaAccount, Equals, SkypieaAccount{Account: "0123456789", Alias: "awsalks", Label: "ALKS - Prod"})
 }
 
 func (s *S) Test_GetAccountsIAMAdmin(c *C) {
@@ -91,6 +92,7 @@ func (s *S) Test_GetAccountsIAMAdmin(c *C) {
 	c.Assert(resp.Accounts[index].Account, Equals, "234567/ALKSIAMAdmin - foobarbaz2") // make sure account name is transformed to key
 	c.Assert(resp.Accounts[index].Role, Equals, "IAMAdmin")
 	c.Assert(resp.Accounts[index].IamActive, Equals, true)
+	c.Assert(resp.Accounts[index].SkypieaAccount, Equals, SkypieaAccount{Account: "0123456789", Alias: "awsalks", Label: "ALKS - Lab"})
 }
 
 func (s *S) Test_GetAccountsAdmin(c *C) {
@@ -106,6 +108,7 @@ func (s *S) Test_GetAccountsAdmin(c *C) {
 	c.Assert(resp.Accounts[index].Account, Equals, "345678/ALKSAdmin - foobarbaz3") // make sure account name is transformed to key
 	c.Assert(resp.Accounts[index].Role, Equals, "Admin")
 	c.Assert(resp.Accounts[index].IamActive, Equals, true)
+	c.Assert(resp.Accounts[index].SkypieaAccount, Equals, SkypieaAccount{Account: "0123456789", Alias: "awsalks", Label: "ALKS - Nonprod"})
 }
 
 var sessionCreate = `
@@ -125,21 +128,36 @@ var getAccounts = `
 		{
 			"account": "123456/ALKSPowerUser",
 			"role": "PowerUser",
-			"iamKeyActive": false
+			"iamKeyActive": false,
+			"skypieaAccount": {
+				"Account": "0123456789",
+				"alias": "awsalks",
+				"label": "ALKS - Prod"
+			}
 		}
 		],
 		"234567/ALKSIAMAdmin - foobarbaz2": [
 		{
 			"account": "234567/ALKSIAMAdmin",
 			"role": "IAMAdmin",
-			"iamKeyActive": true
+			"iamKeyActive": true,
+			"skypieaAccount": {
+				"Account": "0123456789",
+				"alias": "awsalks",
+				"label": "ALKS - Lab"
+			}
 		}
 		],
 		"345678/ALKSAdmin - foobarbaz3": [
 		{
 			"account": "234567/ALKSAdmin",
 			"role": "Admin",
-			"iamKeyActive": true
+			"iamKeyActive": true,
+			"skypieaAccount": {
+				"Account": "0123456789",
+				"alias": "awsalks",
+				"label": "ALKS - Nonprod"
+			}
 		}
 		]
 	}
