@@ -86,6 +86,17 @@ func (s *S) Test_DeleteRoleMachineIdentity(c *C) {
 	c.Assert(resp.MachineIdentityArn, Equals, "arn:aws:iam::123456789123:role/acct-managed/test123")
 }
 
+func (s *S) Test_SearchRoleMachineIdentity(c *C) {
+	testServer.Response(202, nil, machineIdentityResponse)
+
+	resp, err := s.client.SearchRoleMachineIdentity("arn:aws:iam::123456789123:/role/test-role")
+
+	_ = testServer.WaitRequest()
+
+	c.Assert(err, IsNil)
+	c.Assert(resp.MachineIdentityArn, Equals, "arn:aws:iam::123456789123:role/acct-managed/test123")
+}
+
 var iamGetRole = `
 {
     "roleName": "rolebae",
