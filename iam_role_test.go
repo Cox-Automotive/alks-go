@@ -64,6 +64,39 @@ func (s *S) Test_DeleteIamRole(c *C) {
 	c.Assert(err, IsNil)
 }
 
+func (s *S) Test_AddRoleMachineIdentity(c *C) {
+	testServer.Response(202, nil, machineIdentityResponse)
+
+	resp, err := s.client.AddRoleMachineIdentity("arn:aws:iam::123456789123:role/test-role")
+
+	_ = testServer.WaitRequest()
+
+	c.Assert(resp.MachineIdentityArn, Equals, "arn:aws:iam::123456789123:role/acct-managed/test123")
+	c.Assert(err, IsNil)
+}
+
+func (s *S) Test_DeleteRoleMachineIdentity(c *C) {
+	testServer.Response(202, nil, machineIdentityResponse)
+
+	resp, err := s.client.DeleteRoleMachineIdentity("arn:aws:iam::123456789123:role/test-role")
+
+	_ = testServer.WaitRequest()
+
+	c.Assert(err, IsNil)
+	c.Assert(resp.MachineIdentityArn, Equals, "arn:aws:iam::123456789123:role/acct-managed/test123")
+}
+
+func (s *S) Test_SearchRoleMachineIdentity(c *C) {
+	testServer.Response(202, nil, machineIdentityResponse)
+
+	resp, err := s.client.SearchRoleMachineIdentity("arn:aws:iam::123456789123:/role/test-role")
+
+	_ = testServer.WaitRequest()
+
+	c.Assert(err, IsNil)
+	c.Assert(resp.MachineIdentityArn, Equals, "arn:aws:iam::123456789123:role/acct-managed/test123")
+}
+
 var iamGetRole = `
 {
     "roleName": "rolebae",
@@ -96,5 +129,11 @@ var iamGetRole404 = `
     "instanceProfileArn": "",
     "errors": [],
     "roleExists": false
+}
+`
+
+var machineIdentityResponse = `
+{
+	"machineIdentityArn": "arn:aws:iam::123456789123:role/acct-managed/test123"
 }
 `
