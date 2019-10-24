@@ -33,7 +33,6 @@ type IamRoleResponse struct {
 	RoleIPArn     string `json:"instanceProfileArn"`
 	RoleAddedToIP bool   `json:"addedRoleToInstanceProfile"`
 	Exists        bool   `json:"roleExists"`
-	AlksAccess    bool   `json:"machineIdentity"`
 }
 
 // GetIamRoleResponse is used to represent a a IAM Role.
