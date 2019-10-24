@@ -42,6 +42,7 @@ func (s *S) Test_GetIamRole(c *C) {
 	c.Assert(resp.RoleName, Equals, "rolebae")
 	c.Assert(resp.RoleType, Equals, "Admin")
 	c.Assert(resp.Exists, Equals, true)
+	c.Assert(resp.AlksAccess, NotNil)
 }
 
 func (s *S) Test_GetIamRoleMissing(c *C) {
@@ -105,7 +106,8 @@ var iamGetRole = `
     "instanceProfileArn": "aws:arn:foo:ip",
     "addedRoleToInstanceProfile": true,
     "errors": [],
-    "roleExists": true
+	"roleExists": true,
+	"machineIdentity": false
 }
 `
 
