@@ -28,9 +28,10 @@ func (s *S) Test_CreateLongTermKeys(c *C) {
 		IAMUserArn:          "arn:aws:iam::012345678910:user/acct-managed/MY_USERNAME",
 		AddedIAMUserToGroup: true,
 		PartialError:        false,
+		AccessKey:           "thisismykey",
+		SecretKey:           "secret/thisismysecret",
 	})
 }
-
 
 func (s *S) Test_DeleteLongTermKeys(c *C) {
 	testServer.Response(202, nil, deleteLongTermKeys)
@@ -58,7 +59,9 @@ var createLongTermKeys = `
     "iamUserName": "MY_USERNAME",
     "iamUserArn": "arn:aws:iam::012345678910:user/acct-managed/MY_USERNAME",
     "addedIAMUserToGroup": true,
-    "partialError": false
+    "partialError": false,
+	"accessKey": "thisismykey",
+    "secretKey": "secret/thisismysecret"
 }
 `
 

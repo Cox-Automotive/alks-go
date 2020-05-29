@@ -29,6 +29,8 @@ type CreateLongTermKey struct {
 	IAMUserArn          string `json:"iamUserArn"`
 	AddedIAMUserToGroup bool   `json:"addedIAMUserToGroup"`
 	PartialError        bool   `json:"partialError"`
+	AccessKey           string `json:"accessKey"`
+	SecretKey           string `json:"secretKey"`
 }
 
 // LongTermKeyRequest is used to represent the request body to create or delete LTKs
@@ -102,7 +104,7 @@ func (c *Client) CreateLongTermKey(accountId string, roleName string, accountAli
 
 	reqBody, err := json.Marshal(struct{ LongTermKeyRequest }{request})
 
-	if err!= nil {
+	if err != nil {
 		return nil, fmt.Errorf("error encoding LTK create JSON: %s", err)
 	}
 
