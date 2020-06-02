@@ -36,7 +36,6 @@ type CreateLongTermKey struct {
 // LongTermKeyRequest is used to represent the request body to create or delete LTKs
 type LongTermKeyRequest struct {
 	Account     string `json:"account"`
-	Role        string `json:"role"`
 	IamUserName string `json:"iamUserName"`
 }
 
@@ -98,7 +97,6 @@ func (c *Client) CreateLongTermKey(accountId string, roleName string, accountAli
 
 	request := LongTermKeyRequest{
 		Account:     accountId + "/ALKS" + roleName + " - " + accountAlias,
-		Role:        roleName,
 		IamUserName: iamUsername,
 	}
 
@@ -143,7 +141,6 @@ func (c *Client) DeleteLongTermKey(accountId string, roleName string, accountAli
 
 	request := LongTermKeyRequest{
 		Account:     accountId + "/ALKS" + roleName + " - " + accountAlias,
-		Role:        roleName,
 		IamUserName: iamUsername,
 	}
 	reqBody, err := json.Marshal(struct{ LongTermKeyRequest }{request})
