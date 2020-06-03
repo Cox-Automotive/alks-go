@@ -58,10 +58,10 @@ type DeleteLongTermKeyResponse struct {
 
 // GetLongTermKeys gets the LTKs for an account
 // If no error is returned then you will receive a list of LTKs
-func (c *Client) GetLongTermKeys(accountId string, roleName string) (*GetLongTermKeysResponse, error) {
-	log.Printf("[INFO] Getting long term keys for: %s/%s", accountId, roleName)
+func (c *Client) GetLongTermKeys(accountID string, roleName string) (*GetLongTermKeysResponse, error) {
+	log.Printf("[INFO] Getting long term keys for: %s/%s", accountID, roleName)
 
-	req, err := c.NewRequest(nil, "GET", "/ltks/"+accountId+"/"+roleName)
+	req, err := c.NewRequest(nil, "GET", "/ltks/"+accountID+"/"+roleName)
 	if err != nil {
 		return nil, err
 	}
@@ -75,8 +75,8 @@ func (c *Client) GetLongTermKeys(accountId string, roleName string) (*GetLongTer
 	err = decodeBody(resp, &cr)
 
 	if err != nil {
-		if reqId := GetRequestID(resp); reqId != "" {
-			return nil, fmt.Errorf("Error parsing GetLongTermKeysResponse: [%s] %s", reqId, err)
+		if reqID := GetRequestID(resp); reqID != "" {
+			return nil, fmt.Errorf("Error parsing GetLongTermKeysResponse: [%s] %s", reqID, err)
 		}
 
 		return nil, fmt.Errorf("Error parsing GetLongTermKeysResponse: %s", err)
@@ -119,8 +119,8 @@ func (c *Client) CreateLongTermKey(iamUsername string) (*CreateLongTermKeyRespon
 	err = decodeBody(resp, &cr)
 
 	if err != nil {
-		if reqId := GetRequestID(resp); reqId != "" {
-			return nil, fmt.Errorf("error parsing CreateLongTermKeyResponse: [%s] %s", reqId, err)
+		if reqID := GetRequestID(resp); reqID != "" {
+			return nil, fmt.Errorf("error parsing CreateLongTermKeyResponse: [%s] %s", reqID, err)
 		}
 
 		return nil, fmt.Errorf("error parsing CreateLongTermKeyResponse: %s", err)
@@ -163,8 +163,8 @@ func (c *Client) DeleteLongTermKey(iamUsername string) (*DeleteLongTermKeyRespon
 	err = decodeBody(resp, &cr)
 
 	if err != nil {
-		if reqId := GetRequestID(resp); reqId != "" {
-			return nil, fmt.Errorf("error parsing DeleteLongTermKeyResponse: [%s] %s", reqId, err)
+		if reqID := GetRequestID(resp); reqID != "" {
+			return nil, fmt.Errorf("error parsing DeleteLongTermKeyResponse: [%s] %s", reqID, err)
 		}
 
 		return nil, fmt.Errorf("error parsing DeleteLongTermKeyResponse: %s", err)
