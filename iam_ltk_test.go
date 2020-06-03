@@ -7,7 +7,7 @@ import (
 func (s *S) Test_GetLongTermKeys(c *C) {
 	testServer.Response(202, nil, longTermKeys)
 
-	resp, err := s.client.GetLongTermKeys("012345678910", "myRole")
+	resp, err := s.client.GetLongTermKeys()
 
 	_ = testServer.WaitRequest()
 
