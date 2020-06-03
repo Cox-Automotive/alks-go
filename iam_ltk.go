@@ -23,14 +23,13 @@ type GetLongTermKeysResponse struct {
 
 // BaseLongTermKeyResponse encapsulates shared response fields
 type BaseLongTermKeyResponse struct {
-	AddedIAMUserToGroup bool `json:"addedIAMUserToGroup,omitempty"`
-	PartialError        bool `json:"partialError,omitempty"`
+	Action              string `json:"action,omitempty"`
+	AddedIAMUserToGroup bool   `json:"addedIAMUserToGroup,omitempty"`
+	PartialError        bool   `json:"partialError,omitempty"`
 }
 
 // CreateLongTermKey represents the response from API
 type CreateLongTermKey struct {
-	Account     string `json:"account"`
-	Action      string `json:"action"`
 	IAMUserName string `json:"iamUserName"`
 	IAMUserArn  string `json:"iamUserArn"`
 	AccessKey   string `json:"accessKey"`
@@ -39,8 +38,8 @@ type CreateLongTermKey struct {
 
 // LongTermKeyRequest is used to represent the request body to create or delete LTKs
 type LongTermKeyRequest struct {
-	AccountDetails AccountDetails
-	IamUserName    string `json:"iamUserName"`
+	AccountDetails
+	IamUserName string `json:"iamUserName"`
 }
 
 // CreateLongTermKeyResponse is the response to the CLI client
