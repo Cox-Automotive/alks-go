@@ -44,6 +44,7 @@ type LongTermKeyRequest struct {
 
 // CreateLongTermKeyResponse is the response to the CLI client
 type CreateLongTermKeyResponse struct {
+	AccountDetails
 	BaseResponse
 	BaseLongTermKeyResponse
 	CreateLongTermKey
@@ -51,6 +52,7 @@ type CreateLongTermKeyResponse struct {
 
 // DeleteLongTermKeyResponse is the response to the CLI client
 type DeleteLongTermKeyResponse struct {
+	AccountDetails
 	BaseResponse
 	BaseLongTermKeyResponse
 }
