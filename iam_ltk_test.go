@@ -22,14 +22,13 @@ func (s *S) Test_CreateLongTermKeys(c *C) {
 
 	c.Assert(err, IsNil)
 	c.Assert(resp.CreateLongTermKey, DeepEquals, CreateLongTermKey{
-		Account:     "012345678910/ALKSAdmin - AccountAlias",
-		Action:      "CREATE",
 		IAMUserName: "MY_USERNAME",
 		IAMUserArn:  "arn:aws:iam::012345678910:user/acct-managed/MY_USERNAME",
 		AccessKey:   "thisismykey",
 		SecretKey:   "secret/thisismysecret",
 	})
 	c.Assert(resp.BaseLongTermKeyResponse, DeepEquals, BaseLongTermKeyResponse{
+		Action:              "CREATE",
 		AddedIAMUserToGroup: true,
 		PartialError:        false,
 	})
