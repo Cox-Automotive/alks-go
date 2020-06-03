@@ -59,8 +59,18 @@ type DeleteLongTermKeyResponse struct {
 
 // GetLongTermKeys gets the LTKs for an account
 // If no error is returned then you will receive a list of LTKs
-func (c *Client) GetLongTermKeys(accountID string, roleName string) (*GetLongTermKeysResponse, error) {
-	log.Printf("[INFO] Getting long term keys for: %s/%s", accountID, roleName)
+func (c *Client) GetLongTermKeys() (*GetLongTermKeysResponse, error) {
+	log.Printf("[INFO] Getting long term keys")
+
+	accountID, err := c.AccountDetails.GetAccountNumber()
+	if err != nil {
+		return nil, fmt.Errorf("Error reading Account value: %s", err)
+	}
+
+	roleName, err := c.AccountDetails.GetRoleName(false)
+	if err != nil {
+		return nil, fmt.Errorf("Error reading Role value: %s", err)
+	}
 
 	req, err := c.NewRequest(nil, "GET", "/ltks/"+accountID+"/"+roleName)
 	if err != nil {
