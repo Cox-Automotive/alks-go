@@ -7,7 +7,7 @@ import (
 func (s *S) Test_GetLongTermKeys(c *C) {
 	testServer.Response(202, nil, longTermKeys)
 
-	resp, err := s.client.GetLongTermKeys("012345678910", "myRole")
+	resp, err := s.client.GetLongTermKeys()
 
 	_ = testServer.WaitRequest()
 
@@ -18,28 +18,29 @@ func (s *S) Test_GetLongTermKeys(c *C) {
 func (s *S) Test_CreateLongTermKeys(c *C) {
 	testServer.Response(202, nil, createLongTermKeys)
 
-	resp, err := s.client.CreateLongTermKey("012345678910", "Admin", "AccountAlias", "MY_USERNAME")
+	resp, err := s.client.CreateLongTermKey("MY_USERNAME")
 
 	c.Assert(err, IsNil)
 	c.Assert(resp.CreateLongTermKey, DeepEquals, CreateLongTermKey{
-		Account:             "012345678910/ALKSAdmin - AccountAlias",
+		IAMUserName: "MY_USERNAME",
+		IAMUserArn:  "arn:aws:iam::012345678910:user/acct-managed/MY_USERNAME",
+		AccessKey:   "thisismykey",
+		SecretKey:   "secret/thisismysecret",
+	})
+	c.Assert(resp.BaseLongTermKeyResponse, DeepEquals, BaseLongTermKeyResponse{
 		Action:              "CREATE",
-		IAMUserName:         "MY_USERNAME",
-		IAMUserArn:          "arn:aws:iam::012345678910:user/acct-managed/MY_USERNAME",
 		AddedIAMUserToGroup: true,
 		PartialError:        false,
-		AccessKey:           "thisismykey",
-		SecretKey:           "secret/thisismysecret",
 	})
 }
 
 func (s *S) Test_DeleteLongTermKeys(c *C) {
 	testServer.Response(202, nil, deleteLongTermKeys)
 
-	resp, err := s.client.DeleteLongTermKey("012345678910", "myRole", "accountAlias", "MyUserName")
+	resp, err := s.client.DeleteLongTermKey("MyUserName")
 
 	c.Assert(err, IsNil)
-	c.Assert(resp.DeleteLongTermKey, DeepEquals, DeleteLongTermKey{
+	c.Assert(resp.BaseLongTermKeyResponse, DeepEquals, BaseLongTermKeyResponse{
 		AddedIAMUserToGroup: false,
 		PartialError:        false,
 	})
