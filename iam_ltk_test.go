@@ -12,7 +12,18 @@ func (s *S) Test_GetLongTermKeys(c *C) {
 	_ = testServer.WaitRequest()
 
 	c.Assert(err, IsNil)
-	c.Assert(resp.LongTermKeys, DeepEquals, []LongTermKey{LongTermKey{UserName: "bob", AccessKeyID: "verySecret", Status: "Active", CreateDate: "2020-04-20"}})
+	c.Assert(resp.LongTermKeys, DeepEquals, []LongTermKey{{UserName: "bob", AccessKeyID: "verySecret", Status: "Active", CreateDate: "2020-04-20"}})
+}
+
+func (s *S) Test_GetLongTermKey(c *C) {
+	testServer.Response(202, nil, longTermKey)
+
+	resp, err := s.client.GetLongTermKey("bob")
+
+	_ = testServer.WaitRequest()
+
+	c.Assert(err, IsNil)
+	c.Assert(resp.LongTermKey, DeepEquals, LongTermKey{})
 }
 
 func (s *S) Test_CreateLongTermKeys(c *C) {
@@ -76,5 +87,14 @@ var longTermKeys = `
 			"createDate": "2020-04-20"
 		}
 	]
+}
+`
+
+var longTermKey = `
+{
+	"userName": "bob",
+	"accessKeyId": "verySecret",
+	"status": "Active",
+	"createDate": "2020-04-20"
 }
 `
