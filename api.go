@@ -64,6 +64,13 @@ func NewSTSClient(url string, accessKey string, secretKey string, token string) 
 		userAgent:   "alks-go",
 	}
 
+	// Fetch the current login role, and try to populate the account details object.  If we fail, just ignore
+	loginRole, err := client.GetMyLoginRole()
+	if err == nil {
+		client.AccountDetails.Account = loginRole.LoginRole.Account
+		client.AccountDetails.Role = loginRole.LoginRole.Role
+	}
+
 	return &client, nil
 }
 
