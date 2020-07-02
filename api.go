@@ -91,6 +91,16 @@ func (c *Client) SetUserAgent(userAgent string) {
 	c.userAgent = userAgent
 }
 
+// IsUsingSTSCredentials returns a boolean indicating if the client was configured using AWS STS Credentials for authentication
+func (c *Client) IsUsingSTSCredentials() bool {
+	switch c.Credentials.(type) {
+	case *STS:
+		return true
+	default:
+		return false
+	}
+}
+
 // NewRequest will create a new request object for API requests.
 func (c *Client) NewRequest(json []byte, method string, endpoint string) (*http.Request, error) {
 	u, err := url.Parse(c.BaseURL + endpoint)
