@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
 )
 
@@ -111,7 +112,25 @@ func (c *Client) GetLongTermKeys() (*GetLongTermKeysResponse, error) {
 func (c *Client) GetLongTermKey(iamUsername string) (*GetLongTermKeyResponse, error) {
 	log.Printf("[INFO] Getting long term key")
 
-	req, err := c.NewRequest(nil, "GET", "/ltk/search/"+iamUsername)
+	var req *http.Request
+	var err error
+
+	accountID, err := c.AccountDetails.GetAccountNumber()
+	if err != nil {
+		return nil, fmt.Errorf("error reading Account value: %s", err)
+	}
+
+	roleName, err := c.AccountDetails.GetRoleName(false)
+	if err != nil {
+		return nil, fmt.Errorf("error reading Role value: %s", err)
+	}
+
+	if c.IsUsingSTSCredentials() {
+		req, err = c.NewRequest(nil, "GET", "/ltk/search/"+iamUsername)
+	} else {
+		req, err = c.NewRequest(nil, "GET", "/ltk/"+accountID+"/"+roleName+"/search/"+iamUsername)
+	}
+
 	if err != nil {
 		return nil, err
 	}
