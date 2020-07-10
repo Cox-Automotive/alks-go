@@ -115,19 +115,19 @@ func (c *Client) GetLongTermKey(iamUsername string) (*GetLongTermKeyResponse, er
 	var req *http.Request
 	var err error
 
-	accountID, err := c.AccountDetails.GetAccountNumber()
-	if err != nil {
-		return nil, fmt.Errorf("error reading Account value: %s", err)
-	}
-
-	roleName, err := c.AccountDetails.GetRoleName(false)
-	if err != nil {
-		return nil, fmt.Errorf("error reading Role value: %s", err)
-	}
-
 	if c.IsUsingSTSCredentials() {
 		req, err = c.NewRequest(nil, "GET", "/ltk/search/"+iamUsername)
 	} else {
+		accountID, err := c.AccountDetails.GetAccountNumber()
+		if err != nil {
+			return nil, fmt.Errorf("error reading Account value: %s", err)
+		}
+
+		roleName, err := c.AccountDetails.GetRoleName(false)
+		if err != nil {
+			return nil, fmt.Errorf("error reading Role value: %s", err)
+		}
+
 		req, err = c.NewRequest(nil, "GET", "/ltk/"+accountID+"/"+roleName+"/search/"+iamUsername)
 	}
 
