@@ -19,9 +19,17 @@ jobs:
           
     - name: Checkout code to GOPATH compatible directory
       uses: actions/checkout@v2
-      with:
-        fetch-depth: 1
-        path: go/src/github.com/Cox-Automotive/alks-go
+#       with:
+#         fetch-depth: 1
+#         path: go/src/github.com/Cox-Automotive/alks-go
+  
+    - name: Set GOPATH
+        # temporary fix
+        # see https://github.com/actions/setup-go/issues/14
+      run: |
+        echo "##[set-env name=GOPATH;]$(dirname $GITHUB_WORKSPACE)"
+        echo "##[add-path]$(dirname $GITHUB_WORKSPACE)/bin"
+      shell: bash
 
     - name: Debug
       run: |
@@ -30,16 +38,16 @@ jobs:
         echo ${GITHUB_WORKSPACE}
         echo ${GOPATH}
         echo ${GOROOT}
-      env:
-        GOPATH: /home/runner/work/alks-go/go
+#       env:
+#         GOPATH: /home/runner/work/alks-go/go
         
     - name: Install additional dependencies
       run: |
         go test -cover $(go list ./... | grep -v /vendor/)
         go get github.com/hashicorp/go-cleanhttp
         go get github.com/motain/gocheck
-      env:
-        GOPATH: /home/runner/work/alks-go/go
+#       env:
+#         GOPATH: /home/runner/work/alks-go/go
 
     - name: Test
       run: make test
