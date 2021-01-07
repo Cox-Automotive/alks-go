@@ -33,18 +33,13 @@ jobs:
       env:
         GOPATH: /home/runner/work/alks-go/go
         
-#     - name: Install additional dependencies
-#       run: |
-#         go test -cover $(go list ./... | grep -v /vendor/)
-#         go get github.com/hashicorp/go-cleanhttp
-#         go get github.com/motain/gocheck
-#       env:
-#         GOPATH: /home/runner/work/woodpecker/go
+    - name: Install additional dependencies
+      run: |
+        go test -cover $(go list ./... | grep -v /vendor/)
+        go get github.com/hashicorp/go-cleanhttp
+        go get github.com/motain/gocheck
+      env:
+        GOPATH: /home/runner/work/alks-go/go
 
-#     - name: Install additional dependencies
-#       run: |
-#         go get github.com/hashicorp/go-cleanhttp
-#         go get github.com/motain/gocheck
-
-#     - name: Test
-#       run: make test
+    - name: Test
+      run: make test
