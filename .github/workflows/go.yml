@@ -18,10 +18,16 @@ jobs:
       with:
         go-version: 1.7.x
 
-    - name: Install additional dependencies
+    - name: Debug
       run: |
-        go get github.com/hashicorp/go-cleanhttp
-        go get github.com/motain/gocheck
+        pwd
+        echo ${GOPATH}
+        echo ${GOROOT}
 
-    - name: Test
-      run: make test
+#     - name: Install additional dependencies
+#       run: |
+#         go get github.com/hashicorp/go-cleanhttp
+#         go get github.com/motain/gocheck
+
+#     - name: Test
+#       run: make test
