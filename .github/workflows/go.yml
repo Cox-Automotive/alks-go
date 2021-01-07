@@ -11,7 +11,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - name: Checkout code to GOPATH compatible directory
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 1
+        path: go/src/github.com/Cox-Automotive/alks-go
 
     - name: Set up Go
       uses: actions/setup-go@v2
@@ -23,6 +27,14 @@ jobs:
         pwd
         echo ${GOPATH}
         echo ${GOROOT}
+        
+#     - name: Install additional dependencies
+#       run: |
+#         go test -cover $(go list ./... | grep -v /vendor/)
+#         go get github.com/hashicorp/go-cleanhttp
+#         go get github.com/motain/gocheck
+#       env:
+#         GOPATH: /home/runner/work/woodpecker/go
 
 #     - name: Install additional dependencies
 #       run: |
