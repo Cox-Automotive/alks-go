@@ -15,25 +15,13 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v2
       with:
-        go-version: 1.7.x
+        go-version: 1.12.x
           
     - name: Checkout code to GOPATH compatible directory
-      uses: actions/checkout@v2
-#       with:
-#         fetch-depth: 1
-#         path: go/src/github.com/Cox-Automotive/alks-go
-  
-    - name: Build
-      run: |
-        export GOPATH=$HOME/go
-        export GOBIN=$(go env GOPATH)/bin
-        export PATH=$PATH:$GOPATH
-        export PATH=$PATH:$GOBIN
-        mkdir -p $GOPATH/pkg
-        mkdir -p $GOBIN
-        mkdir -p $GOPATH/src/github.com/$GITHUB_REPOSITORY
-        mv $(pwd)/* $GOPATH/src/github.com/$GITHUB_REPOSITORY
-        cd $GOPATH/src/github.com/$GITHUB_REPOSITORY
+      uses: actions/checkout@v1
+      with:
+        fetch-depth: 1
+        path: go/src/github.com/Cox-Automotive/alks-go
 
     - name: Debug
       run: |
@@ -44,8 +32,8 @@ jobs:
         echo ${GOROOT}
         echo ${PATH}
         go env
-#       env:
-#         GOPATH: /home/runner/work/alks-go/go
+      env:
+        GOPATH: /home/runner/work/alks-go/go
 
   
 #     - name: Set GOPATH
@@ -55,9 +43,8 @@ jobs:
       run: |
         go get github.com/hashicorp/go-cleanhttp
         go get github.com/motain/gocheck
-#        go test -cover $(go list ./... | grep -v /vendor/)
-#       env:
-#         GOPATH: /home/runner/work/alks-go/go
+      env:
+        GOPATH: /home/runner/work/alks-go/go
 
     - name: Test
       run: make test
