@@ -16,8 +16,6 @@ jobs:
       uses: actions/setup-go@v2
       with:
         go-version: 1.7.x
-      env:
-        GOPATH: $HOME
           
     - name: Checkout code to GOPATH compatible directory
       uses: actions/checkout@v2
@@ -25,6 +23,17 @@ jobs:
 #         fetch-depth: 1
 #         path: go/src/github.com/Cox-Automotive/alks-go
   
+    - name: Build
+      run: |
+        export GOPATH=$HOME/go
+        export GOBIN=$(go env GOPATH)/bin
+        export PATH=$PATH:$GOPATH
+        export PATH=$PATH:$GOBIN
+        mkdir -p $GOPATH/pkg
+        mkdir -p $GOBIN
+        mkdir -p $GOPATH/src/github.com/$GITHUB_REPOSITORY
+        mv $(pwd)/* $GOPATH/src/github.com/$GITHUB_REPOSITORY
+        cd $GOPATH/src/github.com/$GITHUB_REPOSITORY
 
     - name: Debug
       run: |
@@ -39,8 +48,8 @@ jobs:
 #         GOPATH: /home/runner/work/alks-go/go
 
   
-    - name: Set GOPATH
-      run: export PATH=$PATH:$(go env GOPATH)/bin
+#     - name: Set GOPATH
+#       run: export PATH=$PATH:$(go env GOPATH)/bin
         
     - name: Install additional dependencies
       run: |
