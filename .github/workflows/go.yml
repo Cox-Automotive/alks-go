@@ -23,11 +23,6 @@ jobs:
 #         fetch-depth: 1
 #         path: go/src/github.com/Cox-Automotive/alks-go
   
-    - name: Set GOPATH
-      run: |
-        export PATH=$PATH:$(go env GOPATH)/bin
-        go get -u golang.org/x/lint/golint
-        golint -set_exit_status ./...
 
     - name: Debug
       run: |
@@ -36,8 +31,14 @@ jobs:
         echo ${GITHUB_WORKSPACE}
         echo ${GOPATH}
         echo ${GOROOT}
+        echo ${PATH}
+        go env
 #       env:
 #         GOPATH: /home/runner/work/alks-go/go
+
+  
+    - name: Set GOPATH
+      run: export PATH=$PATH:$(go env GOPATH)/bin
         
     - name: Install additional dependencies
       run: |
