@@ -7,7 +7,7 @@ import (
 func (s *S) Test_CreateIamRole(c *C) {
 	testServer.Response(202, nil, iamGetRole)
 
-	resp, err := s.client.CreateIamRole("rolebae", "Admin", false, false)
+	resp, err := s.client.CreateIamRole("rolebae", "Admin", nil, false, false)
 
 	_ = testServer.WaitRequest()
 
@@ -15,6 +15,25 @@ func (s *S) Test_CreateIamRole(c *C) {
 	c.Assert(resp, NotNil)
 	c.Assert(resp.RoleName, Equals, "rolebae")
 	c.Assert(resp.RoleType, Equals, "Admin")
+}
+
+func (s *S) Test_CreateIamRoleTemplateFields(c *C) {
+	testServer.Response(202, nil, iamGetRoleTemplateFields)
+
+	templateFields := map[string]string{
+		"A": "B",
+		"C": "D",
+	}
+	resp, err := s.client.CreateIamRole("rolebae", "Admin", templateFields, false, false)
+
+	_ = testServer.WaitRequest()
+
+	c.Assert(err, IsNil)
+	c.Assert(resp, NotNil)
+	c.Assert(resp.RoleName, Equals, "rolebae")
+	c.Assert(resp.RoleType, Equals, "Admin")
+	c.Assert(resp.TemplateFields["A"], Equals, templateFields["A"])
+	c.Assert(resp.TemplateFields["C"], Equals, templateFields["C"])
 }
 
 func (s *S) Test_CreateIamTrustRole(c *C) {
@@ -106,8 +125,25 @@ var iamGetRole = `
     "instanceProfileArn": "aws:arn:foo:ip",
     "addedRoleToInstanceProfile": true,
     "errors": [],
-	"roleExists": true,
-	"machineIdentity": false
+		"roleExists": true,
+		"machineIdentity": false
+}
+`
+
+var iamGetRoleTemplateFields = `
+{
+    "roleName": "rolebae",
+    "roleType": "Admin",
+    "roleArn": "aws:arn:foo",
+    "instanceProfileArn": "aws:arn:foo:ip",
+    "addedRoleToInstanceProfile": true,
+    "errors": [],
+		"roleExists": true,
+		"machineIdentity": false,
+		"templateFields": {
+			"A": "B",
+			"C": "D"
+		}
 }
 `
 
