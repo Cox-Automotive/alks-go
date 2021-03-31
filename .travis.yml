@@ -4,7 +4,7 @@ go:
   - "1.12"
   - tip
 script:
-- export GO111MODULE=true
+- export GO111MODULE=on
 - make test
 notifications:
   email: false
