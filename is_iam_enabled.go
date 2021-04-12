@@ -8,26 +8,33 @@ import (
 )
 
 type IsIamEnabledRequest struct {
+	Account string `json:"account,omitempty"`
+	Role    string `json:"role,omitempty"`
 	RoleArn string `json:"roleArn,omitempty"`
 }
 
 // IsIamEnabledResponse is used to represent a role that's IAM active or not.
 type IsIamEnabledResponse struct {
 	BaseResponse
+	Account    string `json:"account,omitempty"`
+	Role       string `json:"role,omitempty"`
 	RoleArn    string `json:"roleArn"`
 	IamEnabled bool   `json:"iamEnabled"`
 }
 
-// IsIamEnabled will check if a MI or STS assumed role is IAM active or not.
+// IsIamEnabled will check if a MI, AccountDetails, or STS assumed role is IAM active or not.
 func (c *Client) IsIamEnabled(roleArn string) (*IsIamEnabledResponse, error) {
 
 	if len(roleArn) > 1 {
 		log.Printf("[INFO] Is IAM enabled for MI: %s", roleArn)
 	} else {
-		log.Printf("[INFO] Is IAM enabled for STS: %s", c.AccountDetails.Role)
+		log.Printf("[INFO] Is IAM enabled for: %s", c.AccountDetails.Account)
+		log.Printf("[INFO] Is IAM enabled for: %s", c.AccountDetails.Role)
 	}
 
 	iam := IsIamEnabledRequest{
+		c.AccountDetails.Account,
+		c.AccountDetails.Role,
 		roleArn,
 	}
 
@@ -60,7 +67,7 @@ func (c *Client) IsIamEnabled(roleArn string) (*IsIamEnabledResponse, error) {
 		return nil, fmt.Errorf("error parsing isIamEnabled response: %s", err)
 	}
 	if validate.RequestFailed() {
-		return nil, fmt.Errorf("error validating if MI is active: [%s] %s", validate.BaseResponse.RequestID, strings.Join(validate.GetErrors(), ", "))
+		return nil, fmt.Errorf("error validating if IAM enabled: [%s] %s", validate.BaseResponse.RequestID, strings.Join(validate.GetErrors(), ", "))
 	}
 
 	return validate, nil
