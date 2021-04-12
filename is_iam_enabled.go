@@ -7,42 +7,33 @@ import (
 	"strings"
 )
 
-type IsIamRoleRequest struct {
-	RoleArn string `json:"roleArn"`
+type IsIamEnabledRequest struct {
+	RoleArn string `json:"roleArn,omitempty"`
 }
 
-// IsIamRoleResponse is used to represent a role that's IAM active or not.
-type IsIamRoleResponse struct {
+// IsIamEnabledResponse is used to represent a role that's IAM active or not.
+type IsIamEnabledResponse struct {
 	BaseResponse
 	RoleArn    string `json:"roleArn"`
 	IamEnabled bool   `json:"iamEnabled"`
 }
 
 // IsIamEnabled will check if a MI or STS assumed role is IAM active or not.
-func (c *Client) IsIamEnabled(roleArn string) (*IsIamRoleResponse, error) {
-	log.Printf("[INFO] Is IAM enabled for MI: %s", roleArn)
-
-	var iam IsIamRoleRequest
-	var body []byte
-	var err error
+func (c *Client) IsIamEnabled(roleArn string) (*IsIamEnabledResponse, error) {
 
 	if len(roleArn) > 1 {
 		log.Printf("[INFO] Is IAM enabled for MI: %s", roleArn)
-
-		// Request for a MI.
-		iam = IsIamRoleRequest{
-			roleArn,
-		}
-
-		body, err = json.Marshal(struct {
-			IsIamRoleRequest
-		}{iam})
 	} else {
 		log.Printf("[INFO] Is IAM enabled for STS: %s", c.AccountDetails.Role)
-
-		// Request for STS
-		body, err = json.Marshal(struct {}{})
 	}
+
+	iam := IsIamEnabledRequest{
+		roleArn,
+	}
+
+	body, err := json.Marshal(struct {
+		IsIamEnabledRequest
+	}{iam})
 
 	if err != nil {
 		return nil, fmt.Errorf("error encoding IAM create role JSON: %s", err)
@@ -58,7 +49,7 @@ func (c *Client) IsIamEnabled(roleArn string) (*IsIamRoleResponse, error) {
 		return nil, err
 	}
 
-	validate := new(IsIamRoleResponse)
+	validate := new(IsIamEnabledResponse)
 	err = decodeBody(resp, validate)
 
 	if err != nil {
