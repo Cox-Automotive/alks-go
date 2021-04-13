@@ -8,16 +8,14 @@ import (
 )
 
 type IsIamEnabledRequest struct {
-	Account string `json:"account,omitempty"`
-	Role    string `json:"role,omitempty"`
+	AccountDetails
 	RoleArn string `json:"roleArn,omitempty"`
 }
 
 // IsIamEnabledResponse is used to represent a role that's IAM active or not.
 type IsIamEnabledResponse struct {
 	BaseResponse
-	Account    string `json:"account,omitempty"`
-	Role       string `json:"role,omitempty"`
+	AccountDetails
 	RoleArn    string `json:"roleArn"`
 	IamEnabled bool   `json:"iamEnabled"`
 }
@@ -28,19 +26,15 @@ func (c *Client) IsIamEnabled(roleArn string) (*IsIamEnabledResponse, error) {
 	if len(roleArn) > 1 {
 		log.Printf("[INFO] Is IAM enabled for MI: %s", roleArn)
 	} else {
-		log.Printf("[INFO] Is IAM enabled for: %s", c.AccountDetails.Account)
-		log.Printf("[INFO] Is IAM enabled for: %s", c.AccountDetails.Role)
+		log.Printf("[INFO] Is IAM enabled for: %s/%s", c.AccountDetails.Account, c.AccountDetails.Role)
 	}
 
 	iam := IsIamEnabledRequest{
-		c.AccountDetails.Account,
-		c.AccountDetails.Role,
+		c.AccountDetails,
 		roleArn,
 	}
 
-	body, err := json.Marshal(struct {
-		IsIamEnabledRequest
-	}{iam})
+	body, err := json.Marshal(iam)
 
 	if err != nil {
 		return nil, fmt.Errorf("error encoding IAM create role JSON: %s", err)
