@@ -9,15 +9,6 @@ import (
 )
 
 // IamRoleRequest is used to represent a new IAM Role request.
-type CreateIamRoleParams struct {
-	roleName                    string
-	roleType                    string
-	templateFields              map[string]string
-	includeDefaultPolicies      bool
-	enableAlksAccess            bool
-	maxSessionDurationInSeconds int
-}
-
 type IamRoleRequest struct {
 	RoleName                    string            `json:"roleName"`
 	RoleType                    string            `json:"roleType"`
@@ -107,7 +98,6 @@ type MachineIdentityResponse struct {
 
 // CreateIamRole will create a new IAM role on AWS. If no error is returned
 // then you will receive a IamRoleResponse object representing the new role.
-//roleName, roleType string, templateFields map[string]string, includeDefaultPolicies, enableAlksAccess bool, maxSessionDurationInSeconds int
 func (c *Client) CreateIamRole(roleName, roleType string, templateFields map[string]string, includeDefaultPolicies, enableAlksAccess bool, maxSessionDurationInSeconds int) (*IamRoleResponse, error) {
 	log.Printf("[INFO] Creating IAM role: %s", roleName)
 
