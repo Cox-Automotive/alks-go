@@ -7,7 +7,7 @@ import (
 func (s *S) Test_CreateIamRole(c *C) {
 	testServer.Response(202, nil, iamGetRole)
 
-	resp, err := s.client.CreateIamRole(CreateIamRoleParams{"rolebae", "Admin", nil, false, false, 7200})
+	resp, err := s.client.CreateIamRole("rolebae", "Admin", nil, false, false, 7200)
 
 	_ = testServer.WaitRequest()
 
@@ -25,7 +25,7 @@ func (s *S) Test_CreateIamRoleTemplateFields(c *C) {
 		"A": "B",
 		"C": "D",
 	}
-	resp, err := s.client.CreateIamRole(CreateIamRoleParams{roleName: "rolebae", roleType: "Admin", templateFields: templateFields, includeDefaultPolicies: false, enableAlksAccess: false})
+	resp, err := s.client.CreateIamRole("rolebae", "Admin", templateFields, false, false, 3600)
 
 	_ = testServer.WaitRequest()
 
