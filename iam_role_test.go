@@ -7,7 +7,7 @@ import (
 func (s *S) Test_CreateIamRole(c *C) {
 	testServer.Response(202, nil, iamGetRole)
 
-	resp, err := s.client.CreateIamRole("rolebae", "Admin", nil, false, false)
+	resp, err := s.client.CreateIamRole(CreateIamRoleParams{"rolebae", "Admin", nil, false, false, 7200})
 
 	_ = testServer.WaitRequest()
 
@@ -15,6 +15,7 @@ func (s *S) Test_CreateIamRole(c *C) {
 	c.Assert(resp, NotNil)
 	c.Assert(resp.RoleName, Equals, "rolebae")
 	c.Assert(resp.RoleType, Equals, "Admin")
+	c.Assert(resp.MaxSessionDurationInSeconds, Equals, 7200)
 }
 
 func (s *S) Test_CreateIamRoleTemplateFields(c *C) {
@@ -24,7 +25,7 @@ func (s *S) Test_CreateIamRoleTemplateFields(c *C) {
 		"A": "B",
 		"C": "D",
 	}
-	resp, err := s.client.CreateIamRole("rolebae", "Admin", templateFields, false, false)
+	resp, err := s.client.CreateIamRole(CreateIamRoleParams{roleName: "rolebae", roleType: "Admin", templateFields: templateFields, includeDefaultPolicies: false, enableAlksAccess: false})
 
 	_ = testServer.WaitRequest()
 
@@ -34,6 +35,7 @@ func (s *S) Test_CreateIamRoleTemplateFields(c *C) {
 	c.Assert(resp.RoleType, Equals, "Admin")
 	c.Assert(resp.TemplateFields["A"], Equals, templateFields["A"])
 	c.Assert(resp.TemplateFields["C"], Equals, templateFields["C"])
+	c.Assert(resp.MaxSessionDurationInSeconds, Equals, 3600)
 }
 
 func (s *S) Test_CreateIamTrustRole(c *C) {
@@ -126,7 +128,8 @@ var iamGetRole = `
     "addedRoleToInstanceProfile": true,
     "errors": [],
 		"roleExists": true,
-		"machineIdentity": false
+		"machineIdentity": false,
+		"maxSessionDurationInSeconds":7200
 }
 `
 
@@ -143,7 +146,8 @@ var iamGetRoleTemplateFields = `
 		"templateFields": {
 			"A": "B",
 			"C": "D"
-		}
+		},
+		"maxSessionDurationInSeconds": 3600
 }
 `
 
