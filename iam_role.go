@@ -108,25 +108,20 @@ type MachineIdentityResponse struct {
 // CreateIamRole will create a new IAM role on AWS. If no error is returned
 // then you will receive a IamRoleResponse object representing the new role.
 //roleName, roleType string, templateFields map[string]string, includeDefaultPolicies, enableAlksAccess bool, maxSessionDurationInSeconds int
-func (c *Client) CreateIamRole(p CreateIamRoleParams) (*IamRoleResponse, error) {
-	log.Printf("[INFO] Creating IAM role: %s", p.roleName)
+func (c *Client) CreateIamRole(roleName, roleType string, templateFields map[string]string, includeDefaultPolicies, enableAlksAccess bool, maxSessionDurationInSeconds int) (*IamRoleResponse, error) {
+	log.Printf("[INFO] Creating IAM role: %s", roleName)
 
 	var include int
-	if p.includeDefaultPolicies {
+	if includeDefaultPolicies {
 		include = 1
 	}
 
-	var maxSessionDurationInSeconds int
-	if p.maxSessionDurationInSeconds == 0 {
-		maxSessionDurationInSeconds = 3600
-	}
-
 	iam := IamRoleRequest{
-		p.roleName,
-		p.roleType,
+		roleName,
+		roleType,
 		include,
-		p.enableAlksAccess,
-		p.templateFields,
+		enableAlksAccess,
+		templateFields,
 		maxSessionDurationInSeconds,
 	}
 
