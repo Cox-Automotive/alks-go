@@ -7,7 +7,7 @@ import (
 func (s *S) Test_CreateIamRole(c *C) {
 	testServer.Response(202, nil, iamGetRole)
 
-	resp, err := s.client.CreateIamRole("rolebae", "Admin", nil, false, false, 7200)
+	resp, err := s.client.CreateIamRole("rolebae", "Admin", nil, false, false)
 
 	_ = testServer.WaitRequest()
 
@@ -15,7 +15,7 @@ func (s *S) Test_CreateIamRole(c *C) {
 	c.Assert(resp, NotNil)
 	c.Assert(resp.RoleName, Equals, "rolebae")
 	c.Assert(resp.RoleType, Equals, "Admin")
-	c.Assert(resp.MaxSessionDurationInSeconds, Equals, 7200)
+	c.Assert(resp.MaxSessionDurationInSeconds, Equals, 3600)
 }
 
 func (s *S) Test_CreateIamRoleTemplateFields(c *C) {
@@ -25,7 +25,7 @@ func (s *S) Test_CreateIamRoleTemplateFields(c *C) {
 		"A": "B",
 		"C": "D",
 	}
-	resp, err := s.client.CreateIamRole("rolebae", "Admin", templateFields, false, false, 3600)
+	resp, err := s.client.CreateIamRole("rolebae", "Admin", templateFields, false, false)
 
 	_ = testServer.WaitRequest()
 
@@ -36,6 +36,29 @@ func (s *S) Test_CreateIamRoleTemplateFields(c *C) {
 	c.Assert(resp.TemplateFields["A"], Equals, templateFields["A"])
 	c.Assert(resp.TemplateFields["C"], Equals, templateFields["C"])
 	c.Assert(resp.MaxSessionDurationInSeconds, Equals, 3600)
+}
+
+func (s *S) Test_CreateIamRoleOptions(c *C) {
+	testServer.Response(202, nil, iamGetRoleOptions)
+
+	templateFields := map[string]string{
+		"A": "B",
+		"C": "D",
+	}
+
+	options := CreateIamRoleOptions{0, false, templateFields, 7200}
+
+	resp, err := s.client.CreateIamRoleWithOptions("rolebae", "Admin", options)
+
+	_ = testServer.WaitRequest()
+
+	c.Assert(err, IsNil)
+	c.Assert(resp, NotNil)
+	c.Assert(resp.RoleName, Equals, "rolebae")
+	c.Assert(resp.RoleType, Equals, "Admin")
+	c.Assert(resp.TemplateFields["A"], Equals, templateFields["A"])
+	c.Assert(resp.TemplateFields["C"], Equals, templateFields["C"])
+	c.Assert(resp.MaxSessionDurationInSeconds, Equals, 7200)
 }
 
 func (s *S) Test_CreateIamTrustRole(c *C) {
@@ -129,7 +152,7 @@ var iamGetRole = `
     "errors": [],
 		"roleExists": true,
 		"machineIdentity": false,
-		"maxSessionDurationInSeconds":7200
+		"maxSessionDurationInSeconds":3600
 }
 `
 
@@ -148,6 +171,24 @@ var iamGetRoleTemplateFields = `
 			"C": "D"
 		},
 		"maxSessionDurationInSeconds": 3600
+}
+`
+
+var iamGetRoleOptions = `
+{
+    "roleName": "rolebae",
+    "roleType": "Admin",
+    "roleArn": "aws:arn:foo",
+    "instanceProfileArn": "aws:arn:foo:ip",
+    "addedRoleToInstanceProfile": true,
+    "errors": [],
+		"roleExists": true,
+		"machineIdentity": false,
+		"templateFields": {
+			"A": "B",
+			"C": "D"
+		},
+		"maxSessionDurationInSeconds": 7200
 }
 `
 
