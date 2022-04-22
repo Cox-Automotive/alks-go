@@ -7,32 +7,47 @@ import (
 func (s *S) Test_CreateIamRole(c *C) {
 	testServer.Response(202, nil, iamGetRole)
 
-	resp, err := s.client.CreateIamRole("rolebae", "Admin", nil, false, false)
+	roleName := "rolebae"
+	roleType := "Amazon EC2"
+	opts := &CreateIamRoleOptions{
+		RoleName: &roleName,
+		RoleType: &roleType,
+	}
+
+	resp, err := s.client.CreateIamRole(opts)
 
 	_ = testServer.WaitRequest()
 
 	c.Assert(err, IsNil)
 	c.Assert(resp, NotNil)
 	c.Assert(resp.RoleName, Equals, "rolebae")
-	c.Assert(resp.RoleType, Equals, "Admin")
+	c.Assert(resp.RoleType, Equals, "Amazon EC2")
 	c.Assert(resp.MaxSessionDurationInSeconds, Equals, 3600)
 }
 
 func (s *S) Test_CreateIamRoleTemplateFields(c *C) {
 	testServer.Response(202, nil, iamGetRoleTemplateFields)
 
+	roleName := "rolebae"
+	roleType := "Amazon EC2"
 	templateFields := map[string]string{
 		"A": "B",
 		"C": "D",
 	}
-	resp, err := s.client.CreateIamRole("rolebae", "Admin", templateFields, false, false)
+	opts := &CreateIamRoleOptions{
+		RoleName:       &roleName,
+		RoleType:       &roleType,
+		TemplateFields: &templateFields,
+	}
+
+	resp, err := s.client.CreateIamRole(opts)
 
 	_ = testServer.WaitRequest()
 
 	c.Assert(err, IsNil)
 	c.Assert(resp, NotNil)
 	c.Assert(resp.RoleName, Equals, "rolebae")
-	c.Assert(resp.RoleType, Equals, "Admin")
+	c.Assert(resp.RoleType, Equals, "Amazon EC2")
 	c.Assert(resp.TemplateFields["A"], Equals, templateFields["A"])
 	c.Assert(resp.TemplateFields["C"], Equals, templateFields["C"])
 	c.Assert(resp.MaxSessionDurationInSeconds, Equals, 3600)
@@ -41,21 +56,28 @@ func (s *S) Test_CreateIamRoleTemplateFields(c *C) {
 func (s *S) Test_CreateIamRoleOptions(c *C) {
 	testServer.Response(202, nil, iamGetRoleOptions)
 
+	roleName := "rolebae"
+	roleType := "Amazon EC2"
 	templateFields := map[string]string{
 		"A": "B",
 		"C": "D",
 	}
+	maxSessionDuration := 7200
+	opts := &CreateIamRoleOptions{
+		RoleName:                    &roleName,
+		RoleType:                    &roleType,
+		TemplateFields:              &templateFields,
+		MaxSessionDurationInSeconds: &maxSessionDuration,
+	}
 
-	options := CreateIamRoleOptions{0, false, templateFields, 7200}
-
-	resp, err := s.client.CreateIamRoleWithOptions("rolebae", "Admin", options)
+	resp, err := s.client.CreateIamRole(opts)
 
 	_ = testServer.WaitRequest()
 
 	c.Assert(err, IsNil)
 	c.Assert(resp, NotNil)
 	c.Assert(resp.RoleName, Equals, "rolebae")
-	c.Assert(resp.RoleType, Equals, "Admin")
+	c.Assert(resp.RoleType, Equals, "Amazon EC2")
 	c.Assert(resp.TemplateFields["A"], Equals, templateFields["A"])
 	c.Assert(resp.TemplateFields["C"], Equals, templateFields["C"])
 	c.Assert(resp.MaxSessionDurationInSeconds, Equals, 7200)
@@ -84,7 +106,7 @@ func (s *S) Test_GetIamRole(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(resp, NotNil)
 	c.Assert(resp.RoleName, Equals, "rolebae")
-	c.Assert(resp.RoleType, Equals, "Admin")
+	c.Assert(resp.RoleType, Equals, "Amazon EC2")
 	c.Assert(resp.Exists, Equals, true)
 	c.Assert(resp.AlksAccess, NotNil)
 }
@@ -145,7 +167,7 @@ func (s *S) Test_SearchRoleMachineIdentity(c *C) {
 var iamGetRole = `
 {
     "roleName": "rolebae",
-    "roleType": "Admin",
+    "roleType": "Amazon EC2",
     "roleArn": "aws:arn:foo",
     "instanceProfileArn": "aws:arn:foo:ip",
     "addedRoleToInstanceProfile": true,
@@ -159,7 +181,7 @@ var iamGetRole = `
 var iamGetRoleTemplateFields = `
 {
     "roleName": "rolebae",
-    "roleType": "Admin",
+    "roleType": "Amazon EC2",
     "roleArn": "aws:arn:foo",
     "instanceProfileArn": "aws:arn:foo:ip",
     "addedRoleToInstanceProfile": true,
@@ -177,7 +199,7 @@ var iamGetRoleTemplateFields = `
 var iamGetRoleOptions = `
 {
     "roleName": "rolebae",
-    "roleType": "Admin",
+    "roleType": "Amazon EC2",
     "roleArn": "aws:arn:foo",
     "instanceProfileArn": "aws:arn:foo:ip",
     "addedRoleToInstanceProfile": true,
