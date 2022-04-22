@@ -149,18 +149,18 @@ func NewIamRoleRequest(options *CreateIamRoleOptions) (*IamRoleRequest, error) {
 // CreateIamRole will create a new IAM role in AWS. If no error is returned
 // then you will receive a IamRoleResponse object representing the new role.
 func (c *Client) CreateIamRole(options *CreateIamRoleOptions) (*IamRoleResponse, error) {
-	iam, err := NewIamRoleRequest(options)
+	request, err := NewIamRoleRequest(options)
 
 	if err != nil {
 		return nil, err
 	}
 
-	log.Printf("[INFO] Creating IAM role: %s", iam.RoleName)
+	log.Printf("[INFO] Creating IAM role: %s", request.RoleName)
 
 	b, err := json.Marshal(struct {
 		IamRoleRequest
 		AccountDetails
-	}{*iam, c.AccountDetails})
+	}{*request, c.AccountDetails})
 
 	if err != nil {
 		return nil, fmt.Errorf("Error encoding IAM create role JSON: %s", err)
@@ -197,12 +197,12 @@ func (c *Client) CreateIamRole(options *CreateIamRoleOptions) (*IamRoleResponse,
 // CreateIamTrustRole will create a new IAM trust role on AWS. If no error is returned
 // then you will receive a IamRoleResponse object representing the new role.
 func (c *Client) CreateIamTrustRole(options *CreateIamRoleOptions) (*IamRoleResponse, error) {
-	iam, err := NewIamRoleRequest(options)
+	request, err := NewIamRoleRequest(options)
 
 	b, err := json.Marshal(struct {
 		IamRoleRequest
 		AccountDetails
-	}{*iam, c.AccountDetails})
+	}{*request, c.AccountDetails})
 
 	if err != nil {
 		return nil, fmt.Errorf("Error encoding IAM create trust role JSON: %s", err)
