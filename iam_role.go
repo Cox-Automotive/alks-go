@@ -8,6 +8,11 @@ import (
 	"strings"
 )
 
+type Tag struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
 type CreateIamRoleOptions struct {
 	RoleName                    *string
 	RoleType                    *string
@@ -16,6 +21,7 @@ type CreateIamRoleOptions struct {
 	TrustArn                    *string
 	TemplateFields              *map[string]string
 	MaxSessionDurationInSeconds *int
+	Tags                        *[]Tag
 }
 
 // IamRoleRequest is used to represent a new IAM Role request.
@@ -27,6 +33,7 @@ type IamRoleRequest struct {
 	TrustArn                    string            `json:"trustArn,omitempty"`
 	TemplateFields              map[string]string `json:"templateFields,omitempty"`
 	MaxSessionDurationInSeconds int               `json:"maxSessionDurationInSeconds"`
+	Tags                        []Tag             `json:"tags"`
 }
 
 // IamRoleResponse is used to represent a a IAM Role.
@@ -141,6 +148,12 @@ func NewIamRoleRequest(options *CreateIamRoleOptions) (*IamRoleRequest, error) {
 		iam.MaxSessionDurationInSeconds = *options.MaxSessionDurationInSeconds
 	} else {
 		iam.MaxSessionDurationInSeconds = 3600
+	}
+
+	if options.Tags != nil {
+		iam.Tags = *options.Tags
+	} else {
+		iam.Tags = nil
 	}
 
 	return iam, nil
