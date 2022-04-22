@@ -83,6 +83,38 @@ func (s *S) Test_CreateIamRoleOptions(c *C) {
 	c.Assert(resp.MaxSessionDurationInSeconds, Equals, 7200)
 }
 
+func (s *S) Test_CreateIamRoleWithTags(c *C) {
+	testServer.Response(202, nil, iamGetRoleOptions)
+
+	roleName := "rolebae"
+	roleType := "Amazon EC2"
+	tags := []Tag{
+		{
+			Key:   "cai-owner",
+			Value: "123456",
+		},
+		{
+			Key:   "cai-person",
+			Value: "161803",
+		},
+	}
+
+	opts := &CreateIamRoleOptions{
+		RoleName: &roleName,
+		RoleType: &roleType,
+		Tags:     &tags,
+	}
+
+	resp, err := s.client.CreateIamRole(opts)
+
+	_ = testServer.WaitRequest()
+
+	c.Assert(err, IsNil)
+	c.Assert(resp, NotNil)
+	c.Assert(resp.RoleName, Equals, "rolebae")
+	c.Assert(resp.RoleType, Equals, "Amazon EC2")
+}
+
 func (s *S) Test_CreateIamTrustRole(c *C) {
 	testServer.Response(202, nil, iamGetTrustRole)
 
