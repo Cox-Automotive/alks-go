@@ -86,7 +86,21 @@ func (s *S) Test_CreateIamRoleOptions(c *C) {
 func (s *S) Test_CreateIamTrustRole(c *C) {
 	testServer.Response(202, nil, iamGetTrustRole)
 
-	resp, err := s.client.CreateIamTrustRole("test-cross-role", "Cross Account", "arn:aws:iam::123456789123:role/test-role", false)
+	roleName := "test-cross-role"
+	roleType := "Cross Account"
+	roleTrust := "arn:aws:iam::123456789123:role/test-role"
+	templateFields := map[string]string{
+		"A": "B",
+		"C": "D",
+	}
+	opts := &CreateIamRoleOptions{
+		RoleName:       &roleName,
+		RoleType:       &roleType,
+		TrustArn:       &roleTrust,
+		TemplateFields: &templateFields,
+	}
+
+	resp, err := s.client.CreateIamTrustRole(opts)
 
 	_ = testServer.WaitRequest()
 
