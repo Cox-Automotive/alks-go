@@ -9,10 +9,12 @@ import (
 )
 
 type CreateIamRoleOptions struct {
-	IncDefPols                  int
-	AlksAccess                  bool
-	TemplateFields              map[string]string
-	MaxSessionDurationInSeconds int
+	RoleName                    *string
+	RoleType                    *string
+	IncludeDefaultPolicies      *bool
+	AlksAccess                  *bool
+	TemplateFields              *map[string]string
+	MaxSessionDurationInSeconds *int
 }
 
 // IamRoleRequest is used to represent a new IAM Role request.
@@ -103,24 +105,62 @@ type MachineIdentityResponse struct {
 	MachineIdentityArn string `json:"machineIdentityArn"`
 }
 
-// CreateIamRoleWithOptions will create a new IAM role on AWS. If no error is returned
-// then you will receive a IamRoleResponse object representing the new role.
-func (c *Client) CreateIamRoleWithOptions(roleName, roleType string, options CreateIamRoleOptions) (*IamRoleResponse, error) {
-	log.Printf("[INFO] Creating IAM role: %s", roleName)
-
-	iam := IamRoleRequest{
-		roleName,
-		roleType,
-		options.IncDefPols,
-		options.AlksAccess,
-		options.TemplateFields,
-		options.MaxSessionDurationInSeconds,
+// Creates a new IamRoleRequest object from options
+func NewIamRoleRequest(options *CreateIamRoleOptions) (*IamRoleRequest, error) {
+	if options.RoleName == nil {
+		return nil, fmt.Errorf("RoleName option must not be nil")
 	}
+
+	if options.RoleType == nil {
+		return nil, fmt.Errorf("RoleType option must not be nil")
+	}
+
+	iam := &IamRoleRequest{
+		RoleName: *options.RoleName,
+		RoleType: *options.RoleType,
+	}
+	if options.IncludeDefaultPolicies != nil && *options.IncludeDefaultPolicies {
+		iam.IncDefPols = 1
+	} else {
+		iam.IncDefPols = 0
+	}
+
+	if options.AlksAccess != nil {
+		iam.AlksAccess = *options.AlksAccess
+	} else {
+		iam.AlksAccess = false
+	}
+
+	if options.TemplateFields != nil {
+		iam.TemplateFields = *options.TemplateFields
+	} else {
+		iam.TemplateFields = nil
+	}
+
+	if options.MaxSessionDurationInSeconds != nil {
+		iam.MaxSessionDurationInSeconds = *options.MaxSessionDurationInSeconds
+	} else {
+		iam.MaxSessionDurationInSeconds = 3600
+	}
+
+	return iam, nil
+}
+
+// CreateIamRole will create a new IAM role in AWS. If no error is returned
+// then you will receive a IamRoleResponse object representing the new role.
+func (c *Client) CreateIamRole(options *CreateIamRoleOptions) (*IamRoleResponse, error) {
+	iam, err := NewIamRoleRequest(options)
+
+	if err != nil {
+		return nil, err
+	}
+
+	log.Printf("[INFO] Creating IAM role: %s", iam.RoleName)
 
 	b, err := json.Marshal(struct {
 		IamRoleRequest
 		AccountDetails
-	}{iam, c.AccountDetails})
+	}{*iam, c.AccountDetails})
 
 	if err != nil {
 		return nil, fmt.Errorf("Error encoding IAM create role JSON: %s", err)
@@ -152,23 +192,6 @@ func (c *Client) CreateIamRoleWithOptions(roleName, roleType string, options Cre
 	}
 
 	return cr, nil
-}
-
-func (c *Client) CreateIamRole(roleName, roleType string, templateFields map[string]string, includeDefaultPolicies, enableAlksAccess bool) (*IamRoleResponse, error) {
-
-	var include int
-	if includeDefaultPolicies {
-		include = 1
-	}
-
-	options := CreateIamRoleOptions{
-		IncDefPols:                  include,
-		AlksAccess:                  enableAlksAccess,
-		TemplateFields:              templateFields,
-		MaxSessionDurationInSeconds: 3600,
-	}
-
-	return c.CreateIamRoleWithOptions(roleName, roleType, options)
 }
 
 // CreateIamTrustRole will create a new IAM trust role on AWS. If no error is returned
