@@ -13,6 +13,7 @@ type CreateIamRoleOptions struct {
 	RoleType                    *string
 	IncludeDefaultPolicies      *bool
 	AlksAccess                  *bool
+	TrustArn                    *string
 	TemplateFields              *map[string]string
 	MaxSessionDurationInSeconds *int
 }
@@ -23,16 +24,9 @@ type IamRoleRequest struct {
 	RoleType                    string            `json:"roleType"`
 	IncDefPols                  int               `json:"includeDefaultPolicy"`
 	AlksAccess                  bool              `json:"enableAlksAccess"`
+	TrustArn                    string            `json:"trustArn,omitempty"`
 	TemplateFields              map[string]string `json:"templateFields,omitempty"`
 	MaxSessionDurationInSeconds int               `json:"maxSessionDurationInSeconds"`
-}
-
-// IamTrustRoleRequest is used to represent a new IAM Trust Role request.
-type IamTrustRoleRequest struct {
-	RoleName   string `json:"roleName"`
-	RoleType   string `json:"roleType"`
-	TrustArn   string `json:"trustArn"`
-	AlksAccess bool   `json:"enableAlksAccess"`
 }
 
 // IamRoleResponse is used to represent a a IAM Role.
@@ -137,6 +131,12 @@ func NewIamRoleRequest(options *CreateIamRoleOptions) (*IamRoleRequest, error) {
 		iam.TemplateFields = nil
 	}
 
+	if options.TrustArn != nil {
+		iam.TrustArn = *options.TrustArn
+	} else {
+		iam.TrustArn = ""
+	}
+
 	if options.MaxSessionDurationInSeconds != nil {
 		iam.MaxSessionDurationInSeconds = *options.MaxSessionDurationInSeconds
 	} else {
@@ -196,20 +196,13 @@ func (c *Client) CreateIamRole(options *CreateIamRoleOptions) (*IamRoleResponse,
 
 // CreateIamTrustRole will create a new IAM trust role on AWS. If no error is returned
 // then you will receive a IamRoleResponse object representing the new role.
-func (c *Client) CreateIamTrustRole(roleName string, roleType string, trustArn string, enableAlksAccess bool) (*IamRoleResponse, error) {
-	log.Printf("[INFO] Creating IAM trust role: %s", roleName)
-
-	iam := IamTrustRoleRequest{
-		roleName,
-		roleType,
-		trustArn,
-		enableAlksAccess,
-	}
+func (c *Client) CreateIamTrustRole(options *CreateIamRoleOptions) (*IamRoleResponse, error) {
+	iam, err := NewIamRoleRequest(options)
 
 	b, err := json.Marshal(struct {
-		IamTrustRoleRequest
+		IamRoleRequest
 		AccountDetails
-	}{iam, c.AccountDetails})
+	}{*iam, c.AccountDetails})
 
 	if err != nil {
 		return nil, fmt.Errorf("Error encoding IAM create trust role JSON: %s", err)
