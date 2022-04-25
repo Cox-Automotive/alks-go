@@ -9,7 +9,7 @@ func (s *S) Test_CreateIamRole(c *C) {
 
 	roleName := "rolebae"
 	roleType := "Amazon EC2"
-	opts := &CreateIamRoleOptions{
+	opts := &IamRoleOptions{
 		RoleName: &roleName,
 		RoleType: &roleType,
 	}
@@ -34,7 +34,7 @@ func (s *S) Test_CreateIamRoleTemplateFields(c *C) {
 		"A": "B",
 		"C": "D",
 	}
-	opts := &CreateIamRoleOptions{
+	opts := &IamRoleOptions{
 		RoleName:       &roleName,
 		RoleType:       &roleType,
 		TemplateFields: &templateFields,
@@ -63,7 +63,7 @@ func (s *S) Test_CreateIamRoleOptions(c *C) {
 		"C": "D",
 	}
 	maxSessionDuration := 7200
-	opts := &CreateIamRoleOptions{
+	opts := &IamRoleOptions{
 		RoleName:                    &roleName,
 		RoleType:                    &roleType,
 		TemplateFields:              &templateFields,
@@ -99,7 +99,7 @@ func (s *S) Test_CreateIamRoleWithTags(c *C) {
 		},
 	}
 
-	opts := &CreateIamRoleOptions{
+	opts := &IamRoleOptions{
 		RoleName: &roleName,
 		RoleType: &roleType,
 		Tags:     &tags,
@@ -125,7 +125,7 @@ func (s *S) Test_CreateIamTrustRole(c *C) {
 		"A": "B",
 		"C": "D",
 	}
-	opts := &CreateIamRoleOptions{
+	opts := &IamRoleOptions{
 		RoleName:       &roleName,
 		RoleType:       &roleType,
 		TrustArn:       &roleTrust,
@@ -165,6 +165,35 @@ func (s *S) Test_GetIamRoleMissing(c *C) {
 	_ = testServer.WaitRequest()
 
 	c.Assert(resp, IsNil)
+}
+
+func (s *S) Test_UpdateIamRole(c *C) {
+	testServer.Response(202, nil, iamGetRole)
+
+	roleName := "rolebae"
+	tags := []Tag{
+		{
+			Key:   "cai-owner",
+			Value: "123456",
+		},
+		{
+			Key:   "cai-person",
+			Value: "161803",
+		},
+	}
+	opts := &IamRoleOptions{
+		RoleName: &roleName,
+		Tags:     &tags,
+	}
+
+	resp, err := s.client.UpdateIamRole(opts)
+
+	_ = testServer.WaitRequest()
+
+	c.Assert(err, IsNil)
+	c.Assert(resp, NotNil)
+	c.Assert(resp.RoleName, Equals, "rolebae")
+	c.Assert(resp.RoleType, Equals, "Amazon EC2")
 }
 
 func (s *S) Test_DeleteIamRole(c *C) {
