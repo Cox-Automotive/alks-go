@@ -276,7 +276,7 @@ func updateOptions(o *IamRoleOptions) (options *IamRoleRequest, err error) {
 }
 
 // UpdateIamRole adds resource tags to an existing IAM role.
-func (c *Client) UpdateIamRole(options *IamRoleOptions) error {
+func (c *Client) UpdateIamRole(options *IamRoleOptions) (*IamRoleResponse, error) {
 	requestOptions, _ := updateOptions(options)
 	log.Printf("[INFO] Updating IAM role %s with Tags: %v", requestOptions.RoleName, requestOptions.Tags)
 
@@ -286,26 +286,26 @@ func (c *Client) UpdateIamRole(options *IamRoleOptions) error {
 
 	req, err := c.NewRequest(b, "POST", "/updateRole/")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	respObj := new(IamRoleResponse)
 	err = decodeBody(resp, &respObj)
 
 	if err != nil {
 		if reqID := GetRequestID(resp); reqID != "" {
-			return fmt.Errorf("Error parsing updateRole response: [%s] %s", reqID, err)
+			return nil, fmt.Errorf("Error parsing updateRole response: [%s] %s", reqID, err)
 		}
-		return fmt.Errorf("Error parsing updateRole response: %s", err)
+		return nil, fmt.Errorf("Error parsing updateRole response: %s", err)
 	}
 	if respObj.RequestFailed() {
-		return fmt.Errorf("Error updating role: [%s] %s", respObj.BaseResponse.RequestID, strings.Join(respObj.GetErrors(), ", "))
+		return nil, fmt.Errorf("Error updating role: [%s] %s", respObj.BaseResponse.RequestID, strings.Join(respObj.GetErrors(), ", "))
 	}
 
-	return nil
+	return respObj, nil
 }
 
 // DeleteIamRole will delete an existing IAM role from AWS. If no error is returned
