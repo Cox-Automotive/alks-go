@@ -27,13 +27,13 @@ type CreateIamRoleOptions struct {
 // IamRoleRequest is used to represent a new IAM Role request.
 type IamRoleRequest struct {
 	RoleName                    string            `json:"roleName"`
-	RoleType                    string            `json:"roleType"`
-	IncDefPols                  int               `json:"includeDefaultPolicy"`
-	AlksAccess                  bool              `json:"enableAlksAccess"`
+	RoleType                    string            `json:"roleType,omitempty"`
+	IncDefPols                  int               `json:"includeDefaultPolicy,omitempty"`
+	AlksAccess                  bool              `json:"enableAlksAccess,omitempty"`
 	TrustArn                    string            `json:"trustArn,omitempty"`
 	TemplateFields              map[string]string `json:"templateFields,omitempty"`
-	MaxSessionDurationInSeconds int               `json:"maxSessionDurationInSeconds"`
-	Tags                        []Tag             `json:"tags"`
+	MaxSessionDurationInSeconds int               `json:"maxSessionDurationInSeconds,omitempty"`
+	Tags                        []Tag             `json:"tags,omitempty"`
 }
 
 // IamRoleResponse is used to represent a a IAM Role.
@@ -249,60 +249,60 @@ func (c *Client) CreateIamTrustRole(options *CreateIamRoleOptions) (*IamRoleResp
 	return cr, nil
 }
 
-func jsonDecode(request *IamRoleRequest, c *Client, operation string) (obj []byte, err error) {
-	obj, e := json.Marshal(struct {
-		IamRoleRequest
-		AccountDetails
-	}{*request, c.AccountDetails})
-
-	if e != nil {
-		err = fmt.Errorf("Error encoding IAM %s JSON: %s", operation, e)
-	}
-	return
+type inputImpl interface {
+	validate() error
 }
 
-func updateOptions(o *IamRoleOptions) (options *IamRoleRequest, err error) {
+type UpdateRoleInput struct {
+	RoleName *string `json:"roleName"`
+	Tags     *[]Tag  `json:"tags,omitempty"`
+}
+
+func (o *UpdateRoleInput) validate() (err error) {
 	if o.RoleName == nil {
 		err = fmt.Errorf("RoleName option must not be nil")
 	}
 	if o.Tags == nil {
 		err = fmt.Errorf("Tags option must not be nil")
 	}
-	options = &IamRoleRequest{
-		RoleName: *o.RoleName,
-		Tags:     *o.Tags,
-	}
 	return
 }
 
 // UpdateIamRole adds resource tags to an existing IAM role.
-func (c *Client) UpdateIamRole(options *IamRoleOptions) (*IamRoleResponse, error) {
-	requestOptions, _ := updateOptions(options)
-	log.Printf("[INFO] Updating IAM role %s with Tags: %v", requestOptions.RoleName, requestOptions.Tags)
-
-	const operation string = "Update Roles"
-
-	b, _ := jsonDecode(requestOptions, c, operation)
-
-	req, err := c.NewRequest(b, "POST", "/updateRole/")
-	if err != nil {
-		return nil, err
+func (c *Client) UpdateIamRole(input *UpdateRoleInput) (*IamRoleResponse, error) {
+	var params inputImpl = input
+	if e := params.validate(); e != nil {
+		return nil, e
 	}
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, err
+
+	obj, e := json.Marshal(struct {
+		UpdateRoleInput
+		AccountDetails
+	}{*input, c.AccountDetails})
+	if e != nil {
+		return nil, e
+	}
+
+	log.Printf("[INFO] Updating IAM role %s with Tags: %v", *(input.RoleName), input.Tags)
+
+	req, e := c.NewRequest(obj, "POST", "/updateRole/")
+	if e != nil {
+		return nil, e
+	}
+	resp, e := c.http.Do(req)
+	if e != nil {
+		return nil, e
 	}
 	respObj := new(IamRoleResponse)
-	err = decodeBody(resp, &respObj)
 
-	if err != nil {
+	if e = decodeBody(resp, &respObj); e != nil {
 		if reqID := GetRequestID(resp); reqID != "" {
-			return nil, fmt.Errorf("Error parsing updateRole response: [%s] %s", reqID, err)
+			return nil, fmt.Errorf("eor parsing updateRole response: [%s] %s", reqID, e)
 		}
-		return nil, fmt.Errorf("Error parsing updateRole response: %s", err)
+		return nil, fmt.Errorf("eor parsing updateRole response: %s", e)
 	}
 	if respObj.RequestFailed() {
-		return nil, fmt.Errorf("Error updating role: [%s] %s", respObj.BaseResponse.RequestID, strings.Join(respObj.GetErrors(), ", "))
+		return nil, fmt.Errorf("eor updating role: [%s] %s", respObj.BaseResponse.RequestID, strings.Join(respObj.GetErrors(), ", "))
 	}
 
 	return respObj, nil

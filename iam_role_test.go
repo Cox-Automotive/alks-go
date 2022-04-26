@@ -181,7 +181,7 @@ func (s *S) Test_UpdateIamRole(c *C) {
 			Value: "161803",
 		},
 	}
-	opts := &CreateIamRoleOptions{
+	opts := &UpdateRoleInput{
 		RoleName: &roleName,
 		Tags:     &tags,
 	}
