@@ -9,7 +9,7 @@ func (s *S) Test_CreateIamRole(c *C) {
 
 	roleName := "rolebae"
 	roleType := "Amazon EC2"
-	opts := &IamRoleOptions{
+	opts := &CreateIamRoleOptions{
 		RoleName: &roleName,
 		RoleType: &roleType,
 	}
@@ -34,7 +34,7 @@ func (s *S) Test_CreateIamRoleTemplateFields(c *C) {
 		"A": "B",
 		"C": "D",
 	}
-	opts := &IamRoleOptions{
+	opts := &CreateIamRoleOptions{
 		RoleName:       &roleName,
 		RoleType:       &roleType,
 		TemplateFields: &templateFields,
@@ -63,7 +63,7 @@ func (s *S) Test_CreateIamRoleOptions(c *C) {
 		"C": "D",
 	}
 	maxSessionDuration := 7200
-	opts := &IamRoleOptions{
+	opts := &CreateIamRoleOptions{
 		RoleName:                    &roleName,
 		RoleType:                    &roleType,
 		TemplateFields:              &templateFields,
@@ -99,7 +99,7 @@ func (s *S) Test_CreateIamRoleWithTags(c *C) {
 		},
 	}
 
-	opts := &IamRoleOptions{
+	opts := &CreateIamRoleOptions{
 		RoleName: &roleName,
 		RoleType: &roleType,
 		Tags:     &tags,
@@ -125,7 +125,7 @@ func (s *S) Test_CreateIamTrustRole(c *C) {
 		"A": "B",
 		"C": "D",
 	}
-	opts := &IamRoleOptions{
+	opts := &CreateIamRoleOptions{
 		RoleName:       &roleName,
 		RoleType:       &roleType,
 		TrustArn:       &roleTrust,
@@ -181,7 +181,7 @@ func (s *S) Test_UpdateIamRole(c *C) {
 			Value: "161803",
 		},
 	}
-	opts := &IamRoleOptions{
+	opts := &CreateIamRoleOptions{
 		RoleName: &roleName,
 		Tags:     &tags,
 	}
