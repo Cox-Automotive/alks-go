@@ -13,7 +13,7 @@ type Tag struct {
 	Value string `json:"value"`
 }
 
-type IamRoleOptions struct {
+type CreateIamRoleOptions struct {
 	RoleName                    *string
 	RoleType                    *string
 	IncludeDefaultPolicies      *bool
@@ -27,13 +27,13 @@ type IamRoleOptions struct {
 // IamRoleRequest is used to represent a new IAM Role request.
 type IamRoleRequest struct {
 	RoleName                    string            `json:"roleName"`
-	RoleType                    string            `json:"roleType,omitempty"`
-	IncDefPols                  int               `json:"includeDefaultPolicy,omitempty"`
-	AlksAccess                  bool              `json:"enableAlksAccess.omitempty"`
+	RoleType                    string            `json:"roleType"`
+	IncDefPols                  int               `json:"includeDefaultPolicy"`
+	AlksAccess                  bool              `json:"enableAlksAccess"`
 	TrustArn                    string            `json:"trustArn,omitempty"`
 	TemplateFields              map[string]string `json:"templateFields,omitempty"`
-	MaxSessionDurationInSeconds int               `json:"maxSessionDurationInSeconds,omitempty"`
-	Tags                        []Tag             `json:"tags,omitempty"`
+	MaxSessionDurationInSeconds int               `json:"maxSessionDurationInSeconds"`
+	Tags                        []Tag             `json:"tags"`
 }
 
 // IamRoleResponse is used to represent a a IAM Role.
@@ -107,7 +107,7 @@ type MachineIdentityResponse struct {
 }
 
 // Creates a new IamRoleRequest object from options
-func NewIamRoleRequest(options *IamRoleOptions) (*IamRoleRequest, error) {
+func NewIamRoleRequest(options *CreateIamRoleOptions) (*IamRoleRequest, error) {
 	if options.RoleName == nil {
 		return nil, fmt.Errorf("RoleName option must not be nil")
 	}
@@ -161,7 +161,7 @@ func NewIamRoleRequest(options *IamRoleOptions) (*IamRoleRequest, error) {
 
 // CreateIamRole will create a new IAM role in AWS. If no error is returned
 // then you will receive a IamRoleResponse object representing the new role.
-func (c *Client) CreateIamRole(options *IamRoleOptions) (*IamRoleResponse, error) {
+func (c *Client) CreateIamRole(options *CreateIamRoleOptions) (*IamRoleResponse, error) {
 	request, err := NewIamRoleRequest(options)
 
 	if err != nil {
@@ -209,7 +209,7 @@ func (c *Client) CreateIamRole(options *IamRoleOptions) (*IamRoleResponse, error
 
 // CreateIamTrustRole will create a new IAM trust role on AWS. If no error is returned
 // then you will receive a IamRoleResponse object representing the new role.
-func (c *Client) CreateIamTrustRole(options *IamRoleOptions) (*IamRoleResponse, error) {
+func (c *Client) CreateIamTrustRole(options *CreateIamRoleOptions) (*IamRoleResponse, error) {
 	request, err := NewIamRoleRequest(options)
 
 	b, err := json.Marshal(struct {
