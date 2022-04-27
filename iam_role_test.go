@@ -181,12 +181,12 @@ func (s *S) Test_UpdateIamRole(c *C) {
 			Value: "161803",
 		},
 	}
-	opts := &UpdateRoleInput{
-		RoleName: &roleName,
-		Tags:     &tags,
-	}
 
-	resp, err := s.client.UpdateIamRole(opts)
+	resp, err := s.client.UpdateIamRole(func(opts *IamRoleInput) {
+		opts.RoleName = &roleName
+		opts.Tags = &tags
+
+	})
 
 	_ = testServer.WaitRequest()
 
