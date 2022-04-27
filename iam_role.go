@@ -249,43 +249,49 @@ func (c *Client) CreateIamTrustRole(options *CreateIamRoleOptions) (*IamRoleResp
 	return cr, nil
 }
 
-type inputImpl interface {
-	validate() error
+type IamRoleInput struct {
+	RoleName                    *string            `json:"roleName"`
+	RoleType                    *string            `json:"roleType,omitempty"`
+	IncDefPols                  *int               `json:"includeDefaultPolicy,omitempty"`
+	AlksAccess                  *bool              `json:"enableAlksAccess,omitempty"`
+	TrustArn                    *string            `json:"trustArn,omitempty"`
+	TemplateFields              *map[string]string `json:"templateFields,omitempty"`
+	MaxSessionDurationInSeconds *int               `json:"maxSessionDurationInSeconds,omitempty"`
+	Tags                        *[]Tag             `json:"tags,omitempty"`
 }
 
-type UpdateRoleInput struct {
-	RoleName *string `json:"roleName"`
-	Tags     *[]Tag  `json:"tags,omitempty"`
+type IamRoleOutput struct {
+	BaseResponse
+	RoleName                    string            `json:"roleName"`
+	RoleType                    string            `json:"roleType,omitempty"`
+	RoleArn                     string            `json:"roleArn,omitempty"`
+	RoleIPArn                   string            `json:"instanceProfileArn,omitempty"`
+	RoleAddedToIP               bool              `json:"addedRoleToInstanceProfile,omitempty"`
+	Exists                      bool              `json:"roleExists,omitempty"`
+	TemplateFields              map[string]string `json:"templateFields,omitempty"`
+	MaxSessionDurationInSeconds int               `json:"maxSessionDurationInSeconds,omitempty"`
+	Tags                        *[]Tag            `json:"tags,omitempty"`
 }
 
-func (o *UpdateRoleInput) validate() (err error) {
-	if o.RoleName == nil {
-		err = fmt.Errorf("RoleName option must not be nil")
-	}
-	if o.Tags == nil {
-		err = fmt.Errorf("Tags option must not be nil")
-	}
-	return
+type requestOp struct {
+	ReqObj   []byte
+	Method   string
+	Endpoint string
 }
 
-// UpdateIamRole adds resource tags to an existing IAM role.
-func (c *Client) UpdateIamRole(input *UpdateRoleInput) (*IamRoleResponse, error) {
-	var params inputImpl = input
-	if e := params.validate(); e != nil {
-		return nil, e
-	}
-
+func (input *IamRoleInput) jsonEncode(c *Client) ([]byte, error) {
 	obj, e := json.Marshal(struct {
-		UpdateRoleInput
+		IamRoleInput
 		AccountDetails
 	}{*input, c.AccountDetails})
 	if e != nil {
 		return nil, e
 	}
+	return obj, e
+}
 
-	log.Printf("[INFO] Updating IAM role %s with Tags: %v", *(input.RoleName), input.Tags)
-
-	req, e := c.NewRequest(obj, "POST", "/updateRole/")
+func (c *Client) newIamRoleRequest(operation *requestOp) (*IamRoleOutput, error) {
+	req, e := c.NewRequest(operation.ReqObj, operation.Method, operation.Endpoint)
 	if e != nil {
 		return nil, e
 	}
@@ -293,19 +299,65 @@ func (c *Client) UpdateIamRole(input *UpdateRoleInput) (*IamRoleResponse, error)
 	if e != nil {
 		return nil, e
 	}
-	respObj := new(IamRoleResponse)
+	respObj := &IamRoleOutput{}
 
 	if e = decodeBody(resp, &respObj); e != nil {
 		if reqID := GetRequestID(resp); reqID != "" {
-			return nil, fmt.Errorf("eor parsing updateRole response: [%s] %s", reqID, e)
+			return nil, fmt.Errorf("error parsing updateRole response: [%s] %s", reqID, e)
 		}
-		return nil, fmt.Errorf("eor parsing updateRole response: %s", e)
+		return nil, fmt.Errorf("error parsing updateRole response: %s", e)
 	}
 	if respObj.RequestFailed() {
-		return nil, fmt.Errorf("eor updating role: [%s] %s", respObj.BaseResponse.RequestID, strings.Join(respObj.GetErrors(), ", "))
+		return nil, fmt.Errorf("error updating role: [%s] %s", respObj.BaseResponse.RequestID, strings.Join(respObj.GetErrors(), ", "))
+	}
+	return respObj, nil
+}
+
+/* UpdateIamRole adds resource tags to an existing IAM role.
+   call this function like so:
+
+	resp, err := s.client.UpdateIamRole(func(opts *IamRoleInput) {
+		opts.RoleName = &roleName
+		opts.Tags = &tags
+	})
+*/
+func (c *Client) UpdateIamRole(options func(*IamRoleInput)) (*IamRoleOutput, error) {
+	input := &IamRoleInput{}
+	if e := input.updateIamRoleValidate(options); e != nil {
+		return nil, e
 	}
 
-	return respObj, nil
+	obj, e := input.jsonEncode(c)
+	if e != nil {
+		return nil, e
+	}
+
+	log.Printf("[INFO] Updating IAM role %s with Tags: %v", *(input.RoleName), input.Tags)
+
+	req := &requestOp{
+		ReqObj:   obj,
+		Method:   "POST",
+		Endpoint: "/updateRole/",
+	}
+	resp, e := c.newIamRoleRequest(req)
+	if e != nil {
+		return nil, e
+	}
+
+	return resp, nil
+}
+
+func (updateRoleInput *IamRoleInput) updateIamRoleValidate(options ...func(*IamRoleInput)) (err error) {
+	for _, f := range options {
+		f(updateRoleInput)
+	}
+	if updateRoleInput.RoleName == nil {
+		err = fmt.Errorf("roleName option must not be nil")
+	}
+	if updateRoleInput.Tags == nil {
+		err = fmt.Errorf("tags option must not be nil")
+	}
+	return
 }
 
 // DeleteIamRole will delete an existing IAM role from AWS. If no error is returned
