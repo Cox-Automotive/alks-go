@@ -262,24 +262,25 @@ type IamRoleInput struct {
 
 type IamRoleOutput struct {
 	BaseResponse
-	RoleName                    string            `json:"roleName"`
-	RoleType                    string            `json:"roleType,omitempty"`
-	RoleArn                     string            `json:"roleArn,omitempty"`
-	RoleIPArn                   string            `json:"instanceProfileArn,omitempty"`
-	RoleAddedToIP               bool              `json:"addedRoleToInstanceProfile,omitempty"`
-	Exists                      bool              `json:"roleExists,omitempty"`
-	TemplateFields              map[string]string `json:"templateFields,omitempty"`
-	MaxSessionDurationInSeconds int               `json:"maxSessionDurationInSeconds,omitempty"`
-	Tags                        *[]Tag            `json:"tags,omitempty"`
+	RoleName                    *string            `json:"roleName"`
+	RoleType                    *string            `json:"roleType,omitempty"`
+	RoleArn                     *string            `json:"roleArn,omitempty"`
+	RoleIPArn                   *string            `json:"instanceProfileArn,omitempty"`
+	RoleAddedToIP               *bool              `json:"addedRoleToInstanceProfile,omitempty"`
+	Exists                      *bool              `json:"roleExists,omitempty"`
+	TemplateFields              *map[string]string `json:"templateFields,omitempty"`
+	MaxSessionDurationInSeconds *int               `json:"maxSessionDurationInSeconds,omitempty"`
+	Tags                        *[]Tag             `json:"tags,omitempty"`
 }
 
 type requestOp struct {
 	ReqObj   []byte
 	Method   string
 	Endpoint string
+	Response *IamRoleOutput
 }
 
-func (input *IamRoleInput) jsonEncode(c *Client) ([]byte, error) {
+func (input *IamRoleInput) marshalJSON(c *Client) ([]byte, error) {
 	obj, e := json.Marshal(struct {
 		IamRoleInput
 		AccountDetails
@@ -290,27 +291,24 @@ func (input *IamRoleInput) jsonEncode(c *Client) ([]byte, error) {
 	return obj, e
 }
 
-func (c *Client) newIamRoleRequest(operation *requestOp) (*IamRoleOutput, error) {
+func (c *Client) makeIamRoleRequest(operation *requestOp) error {
 	req, e := c.NewRequest(operation.ReqObj, operation.Method, operation.Endpoint)
 	if e != nil {
-		return nil, e
+		return e
 	}
 	resp, e := c.http.Do(req)
 	if e != nil {
-		return nil, e
+		return e
 	}
-	respObj := &IamRoleOutput{}
 
-	if e = decodeBody(resp, &respObj); e != nil {
+	if e = decodeBody(resp, &operation.Response); e != nil {
 		if reqID := GetRequestID(resp); reqID != "" {
-			return nil, fmt.Errorf("error parsing updateRole response: [%s] %s", reqID, e)
+			return fmt.Errorf("error parsing updateRole response: [%s] %s", reqID, e)
 		}
-		return nil, fmt.Errorf("error parsing updateRole response: %s", e)
+		return fmt.Errorf("error parsing updateRole response: %s", e)
 	}
-	if respObj.RequestFailed() {
-		return nil, fmt.Errorf("error updating role: [%s] %s", respObj.BaseResponse.RequestID, strings.Join(respObj.GetErrors(), ", "))
-	}
-	return respObj, nil
+
+	return nil
 }
 
 /* UpdateIamRole adds resource tags to an existing IAM role.
@@ -327,7 +325,7 @@ func (c *Client) UpdateIamRole(options func(*IamRoleInput)) (*IamRoleOutput, err
 		return nil, e
 	}
 
-	obj, e := input.jsonEncode(c)
+	obj, e := input.marshalJSON(c)
 	if e != nil {
 		return nil, e
 	}
@@ -338,13 +336,16 @@ func (c *Client) UpdateIamRole(options func(*IamRoleInput)) (*IamRoleOutput, err
 		ReqObj:   obj,
 		Method:   "POST",
 		Endpoint: "/updateRole/",
+		Response: &IamRoleOutput{},
 	}
-	resp, e := c.newIamRoleRequest(req)
-	if e != nil {
+	if e := c.makeIamRoleRequest(req); e != nil {
 		return nil, e
 	}
+	if req.Response.RequestFailed() {
+		return nil, fmt.Errorf("error updating role: [%s] %s", *input.RoleName, strings.Join(req.Response.GetErrors(), ", "))
+	}
 
-	return resp, nil
+	return req.Response, nil
 }
 
 func (updateRoleInput *IamRoleInput) updateIamRoleValidate(options ...func(*IamRoleInput)) (err error) {

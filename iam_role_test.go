@@ -185,15 +185,14 @@ func (s *S) Test_UpdateIamRole(c *C) {
 	resp, err := s.client.UpdateIamRole(func(opts *IamRoleInput) {
 		opts.RoleName = &roleName
 		opts.Tags = &tags
-
 	})
 
 	_ = testServer.WaitRequest()
 
 	c.Assert(err, IsNil)
 	c.Assert(resp, NotNil)
-	c.Assert(resp.RoleName, Equals, "rolebae")
-	c.Assert(resp.RoleType, Equals, "Amazon EC2")
+	c.Assert(*resp.RoleName, Equals, "rolebae")
+	c.Assert(*resp.RoleType, Equals, "Amazon EC2")
 }
 
 func (s *S) Test_DeleteIamRole(c *C) {
