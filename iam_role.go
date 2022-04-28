@@ -309,6 +309,9 @@ func (c *Client) makeIamRoleRequest(operation *requestOp) error {
 		}
 		return fmt.Errorf("error parsing updateRole response: %s", e)
 	}
+	if operation.Response.RequestFailed() {
+		return fmt.Errorf("error updating role: [%s] %s", *operation.Response.RoleName, strings.Join(operation.Response.GetErrors(), ", "))
+	}
 
 	return nil
 }
@@ -343,9 +346,6 @@ func (c *Client) UpdateIamRole(options func(*IamRoleInput)) (*IamRoleOutput, err
 	}
 	if e := c.makeIamRoleRequest(req); e != nil {
 		return nil, e
-	}
-	if req.Response.RequestFailed() {
-		return nil, fmt.Errorf("error updating role: [%s] %s", *input.RoleName, strings.Join(req.Response.GetErrors(), ", "))
 	}
 
 	return req.Response, nil
