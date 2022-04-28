@@ -330,14 +330,13 @@ func (c *Client) UpdateIamRole(options func(*IamRoleInput)) (*IamRoleOutput, err
 	if e := input.updateIamRoleValidate(options); e != nil {
 		return nil, e
 	}
+	log.Printf("[INFO] update IAM role %s with Tags: %v", *input.RoleName, *input.Tags)
 
 	encodeObj := &encodeDetails{IamRoleInput: input, AccountDetails: &c.AccountDetails}
 	obj, e := json.Marshal(encodeObj)
 	if e != nil {
 		return nil, e
 	}
-
-	log.Printf("[INFO] Updating IAM role %s with Tags: %v", *(input.RoleName), input.Tags)
 
 	op := &requestOp{
 		Operation: "update IAM role",
@@ -353,17 +352,17 @@ func (c *Client) UpdateIamRole(options func(*IamRoleInput)) (*IamRoleOutput, err
 	return op.Response, nil
 }
 
-func (updateRoleInput *IamRoleInput) updateIamRoleValidate(options ...func(*IamRoleInput)) (err error) {
+func (input *IamRoleInput) updateIamRoleValidate(options ...func(*IamRoleInput)) error {
 	for _, f := range options {
-		f(updateRoleInput)
+		f(input)
 	}
-	if updateRoleInput.RoleName == nil {
-		err = fmt.Errorf("roleName option must not be nil")
+	if input.RoleName == nil {
+		return fmt.Errorf("roleName option must not be nil")
 	}
-	if updateRoleInput.Tags == nil {
-		err = fmt.Errorf("tags option must not be nil")
+	if input.Tags == nil {
+		return fmt.Errorf("tags option must not be nil")
 	}
-	return
+	return nil
 }
 
 // DeleteIamRole will delete an existing IAM role from AWS. If no error is returned
