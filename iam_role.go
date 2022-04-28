@@ -340,8 +340,8 @@ func (c *Client) UpdateIamRole(options func(*IamRoleInput)) (*IamRoleOutput, err
 
 	req := &requestOp{
 		ReqObj:   obj,
-		Method:   "POST",
-		Endpoint: "/updateRole/",
+		Method:   "PATCH",
+		Endpoint: "/role/",
 		Response: &IamRoleOutput{},
 	}
 	if e := c.makeIamRoleRequest(req); e != nil {
