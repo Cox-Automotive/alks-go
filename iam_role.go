@@ -279,10 +279,11 @@ type encodeDetails struct {
 }
 
 type requestOp struct {
-	ReqObj   []byte
-	Method   string
-	Endpoint string
-	Response *IamRoleOutput
+	Operation string
+	ReqObj    []byte
+	Method    string
+	Endpoint  string
+	Response  *IamRoleOutput
 }
 
 func (enc *encodeDetails) MarshalJSON() ([]byte, error) {
@@ -293,8 +294,8 @@ func (enc *encodeDetails) MarshalJSON() ([]byte, error) {
 	return obj, e
 }
 
-func (c *Client) makeIamRoleRequest(operation *requestOp) error {
-	req, e := c.NewRequest(operation.ReqObj, operation.Method, operation.Endpoint)
+func (c *Client) makeIamRoleRequest(op *requestOp) error {
+	req, e := c.NewRequest(op.ReqObj, op.Method, op.Endpoint)
 	if e != nil {
 		return e
 	}
@@ -303,14 +304,14 @@ func (c *Client) makeIamRoleRequest(operation *requestOp) error {
 		return e
 	}
 
-	if e = decodeBody(resp, &operation.Response); e != nil {
+	if e = decodeBody(resp, &op.Response); e != nil {
 		if reqID := GetRequestID(resp); reqID != "" {
-			return fmt.Errorf("error parsing updateRole response: [%s] %s", reqID, e)
+			return fmt.Errorf("error parsing %s response: [%s] %s", op.Operation, reqID, e)
 		}
-		return fmt.Errorf("error parsing updateRole response: %s", e)
+		return fmt.Errorf("error parsing %s response: %s", op.Operation, e)
 	}
-	if operation.Response.RequestFailed() {
-		return fmt.Errorf("error updating role: [%s] %s", *operation.Response.RoleName, strings.Join(operation.Response.GetErrors(), ", "))
+	if op.Response.RequestFailed() {
+		return fmt.Errorf("error from %s: [%s] %s", op.Operation, *op.Response.RoleName, strings.Join(op.Response.GetErrors(), ", "))
 	}
 
 	return nil
@@ -338,17 +339,18 @@ func (c *Client) UpdateIamRole(options func(*IamRoleInput)) (*IamRoleOutput, err
 
 	log.Printf("[INFO] Updating IAM role %s with Tags: %v", *(input.RoleName), input.Tags)
 
-	req := &requestOp{
-		ReqObj:   obj,
-		Method:   "PATCH",
-		Endpoint: "/role/",
-		Response: &IamRoleOutput{},
+	op := &requestOp{
+		Operation: "update IAM role",
+		ReqObj:    obj,
+		Method:    "PATCH",
+		Endpoint:  "/role/",
+		Response:  &IamRoleOutput{},
 	}
-	if e := c.makeIamRoleRequest(req); e != nil {
+	if e := c.makeIamRoleRequest(op); e != nil {
 		return nil, e
 	}
 
-	return req.Response, nil
+	return op.Response, nil
 }
 
 func (updateRoleInput *IamRoleInput) updateIamRoleValidate(options ...func(*IamRoleInput)) (err error) {
