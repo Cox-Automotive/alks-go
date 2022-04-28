@@ -273,7 +273,7 @@ type IamRoleOutput struct {
 	Tags                        *[]Tag             `json:"tags,omitempty"`
 }
 
-type encoder struct {
+type encodeDetails struct {
 	*AccountDetails
 	*IamRoleInput
 }
@@ -285,7 +285,7 @@ type requestOp struct {
 	Response *IamRoleOutput
 }
 
-func (enc *encoder) MarshalJSON() ([]byte, error) {
+func (enc *encodeDetails) MarshalJSON() ([]byte, error) {
 	obj, e := json.Marshal(*enc)
 	if e != nil {
 		return nil, e
@@ -327,7 +327,7 @@ func (c *Client) UpdateIamRole(options func(*IamRoleInput)) (*IamRoleOutput, err
 		return nil, e
 	}
 
-	encodeObj := &encoder{IamRoleInput: input, AccountDetails: &c.AccountDetails}
+	encodeObj := &encodeDetails{IamRoleInput: input, AccountDetails: &c.AccountDetails}
 	obj, e := json.Marshal(encodeObj)
 	if e != nil {
 		return nil, e
