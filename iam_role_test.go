@@ -167,6 +167,34 @@ func (s *S) Test_GetIamRoleMissing(c *C) {
 	c.Assert(resp, IsNil)
 }
 
+func (s *S) Test_UpdateIamRole(c *C) {
+	testServer.Response(202, nil, iamGetRole)
+
+	roleName := "rolebae"
+	tags := []Tag{
+		{
+			Key:   "cai-owner",
+			Value: "123456",
+		},
+		{
+			Key:   "cai-person",
+			Value: "161803",
+		},
+	}
+
+	resp, err := s.client.UpdateIamRole(func(opts *IamRoleInput) {
+		opts.RoleName = &roleName
+		opts.Tags = &tags
+	})
+
+	_ = testServer.WaitRequest()
+
+	c.Assert(err, IsNil)
+	c.Assert(resp, NotNil)
+	c.Assert(*resp.RoleName, Equals, "rolebae")
+	c.Assert(*resp.RoleType, Equals, "Amazon EC2")
+}
+
 func (s *S) Test_DeleteIamRole(c *C) {
 	testServer.Response(202, nil, "{}")
 
