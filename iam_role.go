@@ -249,33 +249,20 @@ func (c *Client) CreateIamTrustRole(options *CreateIamRoleOptions) (*IamRoleResp
 	return cr, nil
 }
 
-type IamRoleInput struct {
-	RoleName                    *string            `json:"roleName"`
-	RoleType                    *string            `json:"roleType,omitempty"`
-	IncDefPols                  *int               `json:"includeDefaultPolicy,omitempty"`
-	AlksAccess                  *bool              `json:"enableAlksAccess,omitempty"`
-	TrustArn                    *string            `json:"trustArn,omitempty"`
-	TemplateFields              *map[string]string `json:"templateFields,omitempty"`
-	MaxSessionDurationInSeconds *int               `json:"maxSessionDurationInSeconds,omitempty"`
-	Tags                        *[]Tag             `json:"tags,omitempty"`
+type UpdateRoleRequest struct {
+	RoleName *string `json:"roleName"`
+	Tags     *[]Tag  `json:"tags,omitempty"`
 }
 
-type IamRoleOutput struct {
+type UpdateRoleResponse struct {
 	BaseResponse
-	RoleName                    *string            `json:"roleName"`
-	RoleType                    *string            `json:"roleType,omitempty"`
-	RoleArn                     *string            `json:"roleArn,omitempty"`
-	RoleIPArn                   *string            `json:"instanceProfileArn,omitempty"`
-	RoleAddedToIP               *bool              `json:"addedRoleToInstanceProfile,omitempty"`
-	Exists                      *bool              `json:"roleExists,omitempty"`
-	TemplateFields              *map[string]string `json:"templateFields,omitempty"`
-	MaxSessionDurationInSeconds *int               `json:"maxSessionDurationInSeconds,omitempty"`
-	Tags                        *[]Tag             `json:"tags,omitempty"`
-}
-
-type encodeDetails struct {
-	*AccountDetails
-	*IamRoleInput
+	RoleArn         *string `json:"roleArn,omitempty"`
+	RoleName        *string `json:"roleName"`
+	BasicAuth       *bool   `json:"basicAuthUsed,omitempty"`
+	Exists          *bool   `json:"roleExists,omitempty"`
+	RoleIPArn       *string `json:"instanceProfileArn,omitempty"`
+	MachineIdentity *bool   `json:"isMachineIdentity,omitempty"`
+	Tags            *[]Tag  `json:"tags,omitempty"`
 }
 
 type requestOp struct {
