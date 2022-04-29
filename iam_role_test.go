@@ -181,7 +181,7 @@ func (s *S) Test_UpdateIamRole(c *C) {
 			Value: "161803",
 		},
 	}
-	req := &UpdateRoleRequest{RoleName: &roleName, Tags: &tags}
+	req := &UpdateIamRoleRequest{RoleName: &roleName, Tags: &tags}
 	resp, err := s.client.UpdateIamRole(req)
 
 	_ = testServer.WaitRequest()

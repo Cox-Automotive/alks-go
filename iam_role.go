@@ -249,12 +249,12 @@ func (c *Client) CreateIamTrustRole(options *CreateIamRoleOptions) (*IamRoleResp
 	return cr, nil
 }
 
-type UpdateRoleRequest struct {
+type UpdateIamRoleRequest struct {
 	RoleName *string `json:"roleName"`
 	Tags     *[]Tag  `json:"tags"`
 }
 
-type UpdateRoleResponse struct {
+type UpdateIamRoleResponse struct {
 	BaseResponse
 	RoleArn         *string `json:"roleArn"`
 	RoleName        *string `json:"roleName"`
@@ -265,67 +265,45 @@ type UpdateRoleResponse struct {
 	Tags            *[]Tag  `json:"tags"`
 }
 
-type requestOp struct {
-	Operation string
-	ReqObj    []byte
-	Method    string
-	Endpoint  string
-	Response  interface{}
-}
+/* UpdateIamRole adds resource tags to an existing IAM role.
+ */
+func (c *Client) UpdateIamRole(options *UpdateIamRoleRequest) (*UpdateIamRoleResponse, error) {
+	if e := options.updateIamRoleValidate(); e != nil {
+		return nil, e
+	}
+	log.Printf("[INFO] update IAM role %s with Tags: %v", *options.RoleName, *options.Tags)
 
-func (c *Client) makeIamRoleRequest(op *requestOp) error {
-	req, e := c.NewRequest(op.ReqObj, op.Method, op.Endpoint)
+	b, e := json.Marshal(struct {
+		UpdateIamRoleRequest
+		AccountDetails
+	}{*options, c.AccountDetails})
 	if e != nil {
-		return e
+		return nil, e
+	}
+	req, e := c.NewRequest(b, "PATCH", "/role/")
+	if e != nil {
+		return nil, e
 	}
 	resp, e := c.http.Do(req)
 	if e != nil {
-		return e
+		return nil, e
 	}
 
-	if e = decodeBody(resp, op.Response); e != nil {
+	respObj := &UpdateIamRoleResponse{}
+	if e = decodeBody(resp, respObj); e != nil {
 		if reqID := GetRequestID(resp); reqID != "" {
-			return fmt.Errorf("error parsing %s response: [%s] %s", op.Operation, reqID, e)
+			return nil, fmt.Errorf("error parsing update role response: [%s] %s", reqID, e)
 		}
-		return fmt.Errorf("error parsing %s response: %s", op.Operation, e)
+		return nil, fmt.Errorf("error parsing update role response: %s", e)
 	}
-	return nil
+	if respObj.RequestFailed() {
+		return nil, fmt.Errorf("error from update IAM role request: [%s] %s", respObj.RequestID, strings.Join(respObj.GetErrors(), ", "))
+	}
+
+	return respObj, nil
 }
 
-/* UpdateIamRole adds resource tags to an existing IAM role.
- */
-func (c *Client) UpdateIamRole(req *UpdateRoleRequest) (*UpdateRoleResponse, error) {
-	if e := req.updateIamRoleValidate(); e != nil {
-		return nil, e
-	}
-	log.Printf("[INFO] update IAM role %s with Tags: %v", *req.RoleName, *req.Tags)
-
-	b, e := json.Marshal(struct {
-		UpdateRoleRequest
-		AccountDetails
-	}{*req, c.AccountDetails})
-	if e != nil {
-		return nil, e
-	}
-	resp := &UpdateRoleResponse{}
-	op := &requestOp{
-		Operation: "update IAM role",
-		ReqObj:    b,
-		Method:    "PATCH",
-		Endpoint:  "/role/",
-		Response:  resp,
-	}
-	if e := c.makeIamRoleRequest(op); e != nil {
-		return nil, e
-	}
-	if resp.RequestFailed() {
-		return nil, fmt.Errorf("error from update IAM role request: [%s] %s", resp.RequestID, strings.Join(resp.GetErrors(), ", "))
-	}
-
-	return resp, nil
-}
-
-func (req *UpdateRoleRequest) updateIamRoleValidate() error {
+func (req *UpdateIamRoleRequest) updateIamRoleValidate() error {
 	if req.RoleName == nil {
 		return fmt.Errorf("roleName option must not be nil")
 	}
