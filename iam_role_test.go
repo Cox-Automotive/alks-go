@@ -168,9 +168,9 @@ func (s *S) Test_GetIamRoleMissing(c *C) {
 }
 
 func (s *S) Test_UpdateIamRole(c *C) {
-	testServer.Response(202, nil, iamGetRole)
+	testServer.Response(202, nil, updateRoleResponse)
 
-	roleName := "rolebae"
+	roleName := "test-update-role"
 	tags := []Tag{
 		{
 			Key:   "cai-owner",
@@ -181,18 +181,15 @@ func (s *S) Test_UpdateIamRole(c *C) {
 			Value: "161803",
 		},
 	}
-
-	resp, err := s.client.UpdateIamRole(func(opts *IamRoleInput) {
-		opts.RoleName = &roleName
-		opts.Tags = &tags
-	})
+	req := &UpdateRoleRequest{RoleName: &roleName, Tags: &tags}
+	resp, err := s.client.UpdateIamRole(req)
 
 	_ = testServer.WaitRequest()
 
 	c.Assert(err, IsNil)
 	c.Assert(resp, NotNil)
-	c.Assert(*resp.RoleName, Equals, "rolebae")
-	c.Assert(*resp.RoleType, Equals, "Amazon EC2")
+	c.Assert(*resp.RoleName, Equals, "test-update-role")
+	c.Assert(*resp.Tags, NotNil)
 }
 
 func (s *S) Test_DeleteIamRole(c *C) {
@@ -314,5 +311,18 @@ var iamGetRole404 = `
 var machineIdentityResponse = `
 {
 	"machineIdentityArn": "arn:aws:iam::123456789123:role/acct-managed/test123"
+}
+`
+
+var updateRoleResponse = `
+{
+	"roleArn": "aws:arn:foo",
+	"roleName": "test-update-role",
+	"basicAuthUsed": false,
+	"roleExists": true,
+	"instanceProfileArn": "aws:arn:foo:ip",
+	"isMachineIdentity": true,
+	"tags": [{"key":"cai-owner","value":"123456"},{"key":"cai-person","value":"161803"}],
+	"errors": []
 }
 `

@@ -251,18 +251,18 @@ func (c *Client) CreateIamTrustRole(options *CreateIamRoleOptions) (*IamRoleResp
 
 type UpdateRoleRequest struct {
 	RoleName *string `json:"roleName"`
-	Tags     *[]Tag  `json:"tags,omitempty"`
+	Tags     *[]Tag  `json:"tags"`
 }
 
 type UpdateRoleResponse struct {
 	BaseResponse
-	RoleArn         *string `json:"roleArn,omitempty"`
+	RoleArn         *string `json:"roleArn"`
 	RoleName        *string `json:"roleName"`
-	BasicAuth       *bool   `json:"basicAuthUsed,omitempty"`
-	Exists          *bool   `json:"roleExists,omitempty"`
-	RoleIPArn       *string `json:"instanceProfileArn,omitempty"`
-	MachineIdentity *bool   `json:"isMachineIdentity,omitempty"`
-	Tags            *[]Tag  `json:"tags,omitempty"`
+	BasicAuth       *bool   `json:"basicAuthUsed"`
+	Exists          *bool   `json:"roleExists"`
+	RoleIPArn       *string `json:"instanceProfileArn"`
+	MachineIdentity *bool   `json:"isMachineIdentity"`
+	Tags            *[]Tag  `json:"tags"`
 }
 
 type requestOp struct {
@@ -289,11 +289,6 @@ func (c *Client) makeIamRoleRequest(op *requestOp) error {
 		}
 		return fmt.Errorf("error parsing %s response: %s", op.Operation, e)
 	}
-	base := op.Response.(*BaseResponse)
-	if base.RequestFailed() {
-		return fmt.Errorf("error from %s: [%s] %s", op.Operation, base.RequestID, strings.Join(base.GetErrors(), ", "))
-	}
-
 	return nil
 }
 
@@ -312,21 +307,22 @@ func (c *Client) UpdateIamRole(req *UpdateRoleRequest) (*UpdateRoleResponse, err
 	if e != nil {
 		return nil, e
 	}
-
+	resp := &UpdateRoleResponse{}
 	op := &requestOp{
 		Operation: "update IAM role",
 		ReqObj:    b,
 		Method:    "PATCH",
 		Endpoint:  "/role/",
-		Response:  &UpdateRoleResponse{},
+		Response:  resp,
 	}
 	if e := c.makeIamRoleRequest(op); e != nil {
 		return nil, e
 	}
+	if resp.RequestFailed() {
+		return nil, fmt.Errorf("error from update IAM role request: [%s] %s", resp.RequestID, strings.Join(resp.GetErrors(), ", "))
+	}
 
-	resp := op.Response.(UpdateRoleResponse)
-
-	return &resp, nil
+	return resp, nil
 }
 
 func (req *UpdateRoleRequest) updateIamRoleValidate() error {
