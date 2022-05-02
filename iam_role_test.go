@@ -155,6 +155,11 @@ func (s *S) Test_GetIamRole(c *C) {
 	c.Assert(resp.RoleType, Equals, "Amazon EC2")
 	c.Assert(resp.Exists, Equals, true)
 	c.Assert(resp.AlksAccess, NotNil)
+	c.Assert(len(resp.Tags), Equals, 2)
+	c.Assert(resp.Tags[0].Key, Equals, "foo")
+	c.Assert(resp.Tags[0].Value, Equals, "bar")
+	c.Assert(resp.Tags[1].Key, Equals, "cloud")
+	c.Assert(resp.Tags[1].Value, Equals, "railway")
 }
 
 func (s *S) Test_GetIamRoleMissing(c *C) {
@@ -243,9 +248,19 @@ var iamGetRole = `
     "instanceProfileArn": "aws:arn:foo:ip",
     "addedRoleToInstanceProfile": true,
     "errors": [],
-		"roleExists": true,
-		"machineIdentity": false,
-		"maxSessionDurationInSeconds":3600
+    "roleExists": true,
+    "machineIdentity": false,
+    "maxSessionDurationInSeconds":3600,
+    "tags": [
+        {
+            "key": "foo",
+            "value": "bar"
+        },
+        {
+            "key": "cloud",
+            "value": "railway"
+        }
+    ]
 }
 `
 
@@ -257,13 +272,13 @@ var iamGetRoleTemplateFields = `
     "instanceProfileArn": "aws:arn:foo:ip",
     "addedRoleToInstanceProfile": true,
     "errors": [],
-		"roleExists": true,
-		"machineIdentity": false,
-		"templateFields": {
-			"A": "B",
-			"C": "D"
-		},
-		"maxSessionDurationInSeconds": 3600
+    "roleExists": true,
+    "machineIdentity": false,
+    "templateFields": {
+        "A": "B",
+        "C": "D"
+    },
+    "maxSessionDurationInSeconds": 3600
 }
 `
 
@@ -275,13 +290,13 @@ var iamGetRoleOptions = `
     "instanceProfileArn": "aws:arn:foo:ip",
     "addedRoleToInstanceProfile": true,
     "errors": [],
-		"roleExists": true,
-		"machineIdentity": false,
-		"templateFields": {
-			"A": "B",
-			"C": "D"
-		},
-		"maxSessionDurationInSeconds": 7200
+    "roleExists": true,
+    "machineIdentity": false,
+    "templateFields": {
+        "A": "B",
+        "C": "D"
+    },
+    "maxSessionDurationInSeconds": 7200
 }
 `
 
@@ -310,7 +325,7 @@ var iamGetRole404 = `
 
 var machineIdentityResponse = `
 {
-	"machineIdentityArn": "arn:aws:iam::123456789123:role/acct-managed/test123"
+    "machineIdentityArn": "arn:aws:iam::123456789123:role/acct-managed/test123"
 }
 `
 
