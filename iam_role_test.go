@@ -197,6 +197,32 @@ func (s *S) Test_UpdateIamRole(c *C) {
 	c.Assert(*resp.Tags, NotNil)
 }
 
+func (s *S) Test_UpdateIamRoleEmptyList(c *C) {
+	testServer.Response(202, nil, updateRoleResponse)
+
+	roleName := "test-update-role"
+	tags := []Tag{}
+	req := &UpdateIamRoleRequest{RoleName: &roleName, Tags: &tags}
+	resp, err := s.client.UpdateIamRole(req)
+
+	_ = testServer.WaitRequest()
+
+	c.Assert(err, IsNil)
+	c.Assert(resp, NotNil)
+	c.Assert(*resp.RoleName, Equals, "test-update-role")
+	c.Assert(*resp.Tags, NotNil)
+}
+
+func (s *S) Test_UpdateIamRoleNoTags(c *C) {
+	testServer.Response(202, nil, updateRoleResponse)
+
+	roleName := "test-update-role"
+	req := &UpdateIamRoleRequest{RoleName: &roleName}
+	_, err := s.client.UpdateIamRole(req)
+
+	c.Assert(err, NotNil)
+}
+
 func (s *S) Test_DeleteIamRole(c *C) {
 	testServer.Response(202, nil, "{}")
 
