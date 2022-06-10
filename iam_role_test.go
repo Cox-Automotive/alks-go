@@ -1,11 +1,13 @@
 package alks
 
 import (
+	"encoding/json"
+
 	. "github.com/motain/gocheck"
 )
 
 func (s *S) Test_CreateIamRole(c *C) {
-	testServer.Response(202, nil, iamGetRole)
+	testServer.Response(202, nil, iamCreateRole)
 
 	roleName := "rolebae"
 	roleType := "Amazon EC2"
@@ -83,6 +85,66 @@ func (s *S) Test_CreateIamRoleOptions(c *C) {
 	c.Assert(resp.MaxSessionDurationInSeconds, Equals, 7200)
 }
 
+func (s *S) Test_CreateIamRoleWithTrustPolicy(c *C) {
+	testServer.Response(202, nil, iamGetRoleTrustPolicy)
+
+	roleName := "rolebae"
+	trustPolicy := new(map[string]interface{})
+	byt := []byte(`{"Version":"2012-10-17","Statement":[{"Sid":"","Effect":"Allow","Principal":{"Service":"ecs-tasks.amazonaws.com"},"Action":"sts:AssumeRole"}]}`)
+	json.Unmarshal(byt, trustPolicy)
+
+	templateFields := map[string]string{
+		"A": "B",
+		"C": "D",
+	}
+	maxSessionDuration := 7200
+	opts := &CreateIamRoleOptions{
+		RoleName:                    &roleName,
+		TrustPolicy:                 trustPolicy,
+		TemplateFields:              &templateFields,
+		MaxSessionDurationInSeconds: &maxSessionDuration,
+	}
+
+	resp, err := s.client.CreateIamRole(opts)
+
+	_ = testServer.WaitRequest()
+
+	c.Assert(err, IsNil)
+	c.Assert(resp, NotNil)
+	c.Assert(resp.RoleName, Equals, "rolebae")
+	c.Assert(resp.TrustPolicy, DeepEquals, *trustPolicy)
+	c.Assert(resp.TemplateFields["A"], Equals, templateFields["A"])
+	c.Assert(resp.TemplateFields["C"], Equals, templateFields["C"])
+	c.Assert(resp.MaxSessionDurationInSeconds, Equals, 7200)
+}
+
+func (s *S) Test_CreateIamRoleWithTrustPolicyandRoleType(c *C) {
+	testServer.Response(202, nil, iamGetRoleOptions)
+
+	roleName := "rolebae"
+	roleType := "Amazon EC2"
+	trustPolicy := new(map[string]interface{})
+	byt := []byte(`{"Version":"2012-10-17","Statement":[{"Sid":"","Effect":"Allow","Principal":{"Service":"ecs-tasks.amazonaws.com"},"Action":"sts:AssumeRole"}]}`)
+	json.Unmarshal(byt, trustPolicy)
+	templateFields := map[string]string{
+		"A": "B",
+		"C": "D",
+	}
+	maxSessionDuration := 7200
+	opts := &CreateIamRoleOptions{
+		RoleName:                    &roleName,
+		RoleType:                    &roleType,
+		TrustPolicy:                 trustPolicy,
+		TemplateFields:              &templateFields,
+		MaxSessionDurationInSeconds: &maxSessionDuration,
+	}
+
+	resp, err := s.client.CreateIamRole(opts)
+
+	c.Assert(err, NotNil)
+	c.Assert(resp, IsNil)
+}
+
 func (s *S) Test_CreateIamRoleWithTags(c *C) {
 	testServer.Response(202, nil, iamGetRoleOptions)
 
@@ -145,6 +207,9 @@ func (s *S) Test_CreateIamTrustRole(c *C) {
 func (s *S) Test_GetIamRole(c *C) {
 	testServer.Response(202, nil, iamGetRole)
 
+	trustPolicy := new(map[string]interface{})
+	byt := []byte(`{"Version":"2012-10-17","Statement":[{"Sid":"","Effect":"Allow","Principal":{"Service":"ecs-tasks.amazonaws.com"},"Action":"sts:AssumeRole"}]}`)
+	json.Unmarshal(byt, trustPolicy)
 	resp, err := s.client.GetIamRole("rolebae")
 
 	_ = testServer.WaitRequest()
@@ -152,7 +217,7 @@ func (s *S) Test_GetIamRole(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(resp, NotNil)
 	c.Assert(resp.RoleName, Equals, "rolebae")
-	c.Assert(resp.RoleType, Equals, "Amazon EC2")
+	c.Assert(resp.TrustPolicy, DeepEquals, *trustPolicy)
 	c.Assert(resp.Exists, Equals, true)
 	c.Assert(resp.AlksAccess, NotNil)
 	c.Assert(len(resp.Tags), Equals, 2)
@@ -240,10 +305,35 @@ func (s *S) Test_SearchRoleMachineIdentity(c *C) {
 	c.Assert(resp.MachineIdentityArn, Equals, "arn:aws:iam::123456789123:role/acct-managed/test123")
 }
 
-var iamGetRole = `
+var iamCreateRole = `
 {
     "roleName": "rolebae",
     "roleType": "Amazon EC2",
+	"trustPolicy": {"Version":"2012-10-17","Statement":[{"Sid":"","Effect":"Allow","Principal":{"Service":"ecs-tasks.amazonaws.com"},"Action":"sts:AssumeRole"}]},
+    "roleArn": "aws:arn:foo",
+    "instanceProfileArn": "aws:arn:foo:ip",
+    "addedRoleToInstanceProfile": true,
+    "errors": [],
+    "roleExists": true,
+    "machineIdentity": false,
+    "maxSessionDurationInSeconds":3600,
+    "tags": [
+        {
+            "key": "foo",
+            "value": "bar"
+        },
+        {
+            "key": "cloud",
+            "value": "railway"
+        }
+    ]
+}
+`
+
+var iamGetRole = `
+{
+    "roleName": "rolebae",
+	"trustPolicy": {"Version":"2012-10-17","Statement":[{"Sid":"","Effect":"Allow","Principal":{"Service":"ecs-tasks.amazonaws.com"},"Action":"sts:AssumeRole"}]},
     "roleArn": "aws:arn:foo",
     "instanceProfileArn": "aws:arn:foo:ip",
     "addedRoleToInstanceProfile": true,
@@ -279,6 +369,25 @@ var iamGetRoleTemplateFields = `
         "C": "D"
     },
     "maxSessionDurationInSeconds": 3600
+}
+`
+
+var iamGetRoleTrustPolicy = `
+{
+    "roleName": "rolebae",
+    "roleType": "Amazon EC2",
+	"trustPolicy": {"Version":"2012-10-17","Statement":[{"Sid":"","Effect":"Allow","Principal":{"Service":"ecs-tasks.amazonaws.com"},"Action":"sts:AssumeRole"}]},
+    "roleArn": "aws:arn:foo",
+    "instanceProfileArn": "aws:arn:foo:ip",
+    "addedRoleToInstanceProfile": true,
+    "errors": [],
+    "roleExists": true,
+    "machineIdentity": false,
+    "templateFields": {
+        "A": "B",
+        "C": "D"
+    },
+    "maxSessionDurationInSeconds": 7200
 }
 `
 
