@@ -118,8 +118,8 @@ func NewIamRoleRequest(options *CreateIamRoleOptions) (*IamRoleRequest, error) {
 		return nil, fmt.Errorf("RoleName option must not be nil")
 	}
 
-	trustPolicyExists := options.TrustPolicy == nil
-	roleTypeExists := options.RoleType == nil
+	trustPolicyExists := options.TrustPolicy != nil
+	roleTypeExists := options.RoleType != nil
 	if trustPolicyExists == roleTypeExists {
 		return nil, fmt.Errorf("Either RoleType or TrustPolicy must be included, but not both")
 	}
@@ -128,11 +128,11 @@ func NewIamRoleRequest(options *CreateIamRoleOptions) (*IamRoleRequest, error) {
 		RoleName: *options.RoleName,
 	}
 
-	if options.RoleType != nil {
+	if roleTypeExists {
 		iam.RoleType = *options.RoleType
 	}
 
-	if options.TrustPolicy != nil {
+	if trustPolicyExists {
 		iam.TrustPolicy = *options.TrustPolicy
 	}
 
