@@ -123,7 +123,6 @@ func NewIamRoleRequest(options *CreateIamRoleOptions) (*IamRoleRequest, error) {
 	if trustPolicyExists == roleTypeExists {
 		return nil, fmt.Errorf("Either RoleType or TrustPolicy must be included, but not both")
 	}
-	}
 
 	iam := &IamRoleRequest{
 		RoleName: *options.RoleName,
