@@ -3,7 +3,7 @@
 *.a
 *.so
 
-# Folders
+# Fol
 _obj
 _test
 
@@ -25,3 +25,6 @@ _testmain.go
 
 # GoLand
 *.idea
+
+# VS Code
+.vscode

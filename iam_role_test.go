@@ -225,6 +225,7 @@ func (s *S) Test_GetIamRole(c *C) {
 	c.Assert(resp.Tags[0].Value, Equals, "bar")
 	c.Assert(resp.Tags[1].Key, Equals, "cloud")
 	c.Assert(resp.Tags[1].Value, Equals, "railway")
+	c.Assert(resp.MaxSessionDurationInSeconds, Equals, 7200)
 }
 
 func (s *S) Test_GetIamRoleMissing(c *C) {
@@ -340,7 +341,7 @@ var iamGetRole = `
     "errors": [],
     "roleExists": true,
     "machineIdentity": false,
-    "maxSessionDurationInSeconds":3600,
+    "maxSessionDurationInSeconds":7200,
     "tags": [
         {
             "key": "foo",
