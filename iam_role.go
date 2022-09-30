@@ -521,7 +521,7 @@ func (c *Client) GetIamRole(roleName string) (*GetIamRoleResponse, error) {
 		return nil, err
 	}
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 || resp.StatusCode != 404 {
+	if (resp.StatusCode < 200 || resp.StatusCode >= 300) && resp.StatusCode != 404 {
 		getErr := new(AlksError)
 		err = decodeBody(resp, &getErr)
 
