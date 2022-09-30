@@ -563,10 +563,6 @@ func (c *Client) GetIamRole(roleName string) (*GetIamRoleResponse, error) {
 		return nil, fmt.Errorf("Error getting role: [%s] %s", cr.BaseResponse.RequestID, strings.Join(cr.GetErrors(), ", "))
 	}
 
-	if !cr.Exists {
-		return nil, fmt.Errorf("[%s] Role does not exist", cr.BaseResponse.RequestID)
-	}
-
 	// This is here because ALKS returns a string representation of a Java array
 	// with the only entry being the instance profile ARN (ie: "[\"ARN\"]")
 	// A simple regex fixes the formatting issue and using existing instance
