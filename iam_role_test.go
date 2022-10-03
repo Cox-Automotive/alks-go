@@ -27,6 +27,24 @@ func (s *S) Test_CreateIamRole(c *C) {
 	c.Assert(resp.MaxSessionDurationInSeconds, Equals, 3600)
 }
 
+func (s *S) Test_CreateIamRoleBad(c *C) {
+	testServer.Response(400, nil, iamCreateRole400)
+
+	roleName := "rolebae"
+	roleType := "Amazon EC2"
+	opts := &CreateIamRoleOptions{
+		RoleName: &roleName,
+		RoleType: &roleType,
+	}
+
+	resp, err := s.client.CreateIamRole(opts)
+
+	_ = testServer.WaitRequest()
+
+	c.Assert(err, NotNil)
+	c.Assert(resp, IsNil)
+}
+
 func (s *S) Test_CreateIamRoleTemplateFields(c *C) {
 	testServer.Response(202, nil, iamGetRoleTemplateFields)
 
@@ -229,13 +247,25 @@ func (s *S) Test_GetIamRole(c *C) {
 }
 
 func (s *S) Test_GetIamRoleMissing(c *C) {
-	testServer.Response(202, nil, iamGetRole404)
+	testServer.Response(404, nil, iamGetRole404)
 
-	resp, _ := s.client.GetIamRole("rolebaez")
+	resp, err := s.client.GetIamRole("rolebaez")
+
+	_ = testServer.WaitRequest()
+
+	c.Assert(resp, NotNil)
+	c.Assert(err, IsNil)
+}
+
+func (s *S) Test_GetIamRoleInternalError(c *C) {
+	testServer.Response(500, nil, iamGetRole500)
+
+	resp, err := s.client.GetIamRole("rolebaez")
 
 	_ = testServer.WaitRequest()
 
 	c.Assert(resp, IsNil)
+	c.Assert(err, NotNil)
 }
 
 func (s *S) Test_UpdateIamRole(c *C) {
@@ -271,6 +301,36 @@ func (s *S) Test_DeleteIamRole(c *C) {
 	_ = testServer.WaitRequest()
 
 	c.Assert(err, IsNil)
+}
+
+func (s *S) Test_DeleteIamRoleNotFound(c *C) {
+	testServer.Response(404, nil, iamDeleteRole404)
+
+	err := s.client.DeleteIamRole("rolebaezzzzz")
+
+	_ = testServer.WaitRequest()
+
+	c.Assert(err, NotNil)
+}
+
+func (s *S) Test_DeleteIamRoleNotFoundNoReqId(c *C) {
+	testServer.Response(404, nil, iamDeleteRole404NoReqId)
+
+	err := s.client.DeleteIamRole("rolebaezzzzz")
+
+	_ = testServer.WaitRequest()
+
+	c.Assert(err, NotNil)
+}
+
+func (s *S) Test_DeleteIamRoleInternalError(c *C) {
+	testServer.Response(500, nil, iamDeleteRole500)
+
+	err := s.client.DeleteIamRole("rolebaezzzzz")
+
+	_ = testServer.WaitRequest()
+
+	c.Assert(err, NotNil)
 }
 
 func (s *S) Test_AddRoleMachineIdentity(c *C) {
@@ -432,6 +492,74 @@ var iamGetRole404 = `
     "roleExists": false
 }
 `
+
+var iamGetRole500 = `
+{
+    "roleName": "",
+    "roleType": "",
+    "roleArn": "",
+    "instanceProfileArn": "",
+    "errors": ["Internal Server Error"],
+    "roleExists": false
+}
+`
+
+var iamCreateRole400 = `
+{
+    "statusMessage": "Role already exists with the same name: TestGo",
+    "errors": [
+        "Role already exists with the same name: TestGo"
+    ],
+    "requestId": "mqtwkzij",
+    "role": "",
+    "account": "",
+    "action": "CREATE",
+    "addedRoleToInstanceProfile": false,
+    "roleArn": "NA",
+    "denyArns": "NA",
+    "roleName": "",
+    "includeDefaultPolicy": 1,
+    "maxSessionDurationInSeconds": 3600
+}`
+
+var iamDeleteRole404 = `
+{
+    "statusMessage": "Failed",
+    "errors": [
+        "Role not found"
+    ],
+    "requestId": "",
+    "role": "",
+    "account": "",
+    "action": "DELETE",
+    "roleName": "TestGo"
+}`
+
+var iamDeleteRole404NoReqId = `
+{
+    "statusMessage": "Failed",
+    "errors": [
+        "Role not found"
+    ],
+    "requestId": "",
+    "role": "",
+    "account": "",
+    "action": "DELETE",
+    "roleName": ""
+}`
+
+var iamDeleteRole500 = `
+{
+    "statusMessage": "Failed",
+    "errors": [
+        "Internal Server Error"
+    ],
+    "requestId": "",
+    "role": "",
+    "account": "",
+    "action": "DELETE",
+    "roleName": ""
+}`
 
 var machineIdentityResponse = `
 {
