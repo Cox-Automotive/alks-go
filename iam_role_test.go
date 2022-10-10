@@ -253,8 +253,9 @@ func (s *S) Test_GetIamRoleMissing(c *C) {
 
 	_ = testServer.WaitRequest()
 
-	c.Assert(resp, NotNil)
-	c.Assert(err, IsNil)
+	c.Assert(resp, IsNil)
+	c.Assert(err, NotNil)
+	c.Assert(err.StatusCode, Equals, 404)
 }
 
 func (s *S) Test_GetIamRoleInternalError(c *C) {
@@ -266,6 +267,7 @@ func (s *S) Test_GetIamRoleInternalError(c *C) {
 
 	c.Assert(resp, IsNil)
 	c.Assert(err, NotNil)
+	c.Assert(err.StatusCode, Equals, 500)
 }
 
 func (s *S) Test_UpdateIamRole(c *C) {

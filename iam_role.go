@@ -177,7 +177,7 @@ func NewIamRoleRequest(options *CreateIamRoleOptions) (*IamRoleRequest, error) {
 
 // CreateIamRole will create a new IAM role in AWS. If no error is returned
 // then you will receive a IamRoleResponse object representing the new role.
-func (c *Client) CreateIamRole(options *CreateIamRoleOptions) (*IamRoleResponse, error) {
+func (c *Client) CreateIamRole(options *CreateIamRoleOptions) (*IamRoleResponse, *AlksError) {
 	request, err := NewIamRoleRequest(options)
 
 	if err != nil {
@@ -266,7 +266,7 @@ func (c *Client) CreateIamRole(options *CreateIamRoleOptions) (*IamRoleResponse,
 
 // CreateIamTrustRole will create a new IAM trust role on AWS. If no error is returned
 // then you will receive a IamRoleResponse object representing the new role.
-func (c *Client) CreateIamTrustRole(options *CreateIamRoleOptions) (*IamRoleResponse, error) {
+func (c *Client) CreateIamTrustRole(options *CreateIamRoleOptions) (*IamRoleResponse, *AlksError) {
 	request, err := NewIamRoleRequest(options)
 
 	b, err := json.Marshal(struct {
@@ -363,7 +363,7 @@ type UpdateIamRoleResponse struct {
 
 /* UpdateIamRole adds resource tags to an existing IAM role.
  */
-func (c *Client) UpdateIamRole(options *UpdateIamRoleRequest) (*UpdateIamRoleResponse, error) {
+func (c *Client) UpdateIamRole(options *UpdateIamRoleRequest) (*UpdateIamRoleResponse, *AlksError) {
 	if err := options.updateIamRoleValidate(); err != nil {
 		return nil, &AlksError{
 			Err: err,
@@ -452,7 +452,7 @@ func (req *UpdateIamRoleRequest) updateIamRoleValidate() error {
 
 // DeleteIamRole will delete an existing IAM role from AWS. If no error is returned
 // then the deletion was successful.
-func (c *Client) DeleteIamRole(id string) error {
+func (c *Client) DeleteIamRole(id string) *AlksError {
 	log.Printf("[INFO] Deleting IAM role: %s", id)
 
 	rmRole := DeleteRoleRequest{id}
@@ -538,7 +538,7 @@ func (c *Client) DeleteIamRole(id string) error {
 // If no error is returned then you will received a IamRoleResponse object
 // representing the existing role. If the role does not exist the IamRoleResponse
 // object will also be nil.
-func (c *Client) GetIamRole(roleName string) (*GetIamRoleResponse, error) {
+func (c *Client) GetIamRole(roleName string) (*GetIamRoleResponse, *AlksError) {
 	log.Printf("[INFO] Getting IAM role: %s", roleName)
 	getRole := GetRoleRequest{roleName}
 
@@ -633,7 +633,7 @@ func (c *Client) GetIamRole(roleName string) (*GetIamRoleResponse, error) {
 
 // AddRoleMachineIdentity enable machine identity for a IamRole.
 // If no error is returned then you will receieve the arn for the machine identity that was created.
-func (c *Client) AddRoleMachineIdentity(roleARN string) (*MachineIdentityResponse, error) {
+func (c *Client) AddRoleMachineIdentity(roleARN string) (*MachineIdentityResponse, *AlksError) {
 	log.Printf("[INFO] Adding role machine identity: %s", roleARN)
 	addMI := AddRoleMachineIdentityRequest{roleARN}
 
@@ -714,7 +714,7 @@ func (c *Client) AddRoleMachineIdentity(roleARN string) (*MachineIdentityRespons
 
 // DeleteRoleMachineIdentity disable machine identity for a IamRole.
 // If no error is returned then you will receieve the arn for the machine identity that was deleted.
-func (c *Client) DeleteRoleMachineIdentity(roleARN string) (*MachineIdentityResponse, error) {
+func (c *Client) DeleteRoleMachineIdentity(roleARN string) (*MachineIdentityResponse, *AlksError) {
 	log.Printf("[INFO] Deleting role machine identity: %s", roleARN)
 	deleteMI := DeleteRoleMachineIdentityRequest{roleARN}
 
@@ -795,7 +795,7 @@ func (c *Client) DeleteRoleMachineIdentity(roleARN string) (*MachineIdentityResp
 
 // SearchRoleMachineIdentity searches for a machine identity for a given roleARN
 // If no error is returned then you will receive the arn of the machine identity for the given roleARN
-func (c *Client) SearchRoleMachineIdentity(roleARN string) (*MachineIdentityResponse, error) {
+func (c *Client) SearchRoleMachineIdentity(roleARN string) (*MachineIdentityResponse, *AlksError) {
 	log.Printf("[INFO] Searching role machine identity: %s", roleARN)
 	searchMI := SearchRoleMachineIdentityRequest{roleARN}
 

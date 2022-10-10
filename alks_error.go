@@ -5,8 +5,8 @@ import (
 )
 
 type AlksError struct {
-	StatusCode int      
-	RequestId  string   `json:"requestId"`
+	StatusCode int
+	RequestId  string `json:"requestId"`
 	Err        error
 }
 
