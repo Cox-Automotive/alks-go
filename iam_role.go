@@ -182,7 +182,9 @@ func (c *Client) CreateIamRole(options *CreateIamRoleOptions) (*IamRoleResponse,
 
 	if err != nil {
 		return nil, &AlksError{
-			Err: err,
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
 		}
 	}
 
@@ -195,21 +197,27 @@ func (c *Client) CreateIamRole(options *CreateIamRoleOptions) (*IamRoleResponse,
 
 	if err != nil {
 		return nil, &AlksError{
-			Err: fmt.Errorf("Error encoding IAM create role JSON: %s", err),
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        fmt.Errorf("Error encoding IAM create role JSON: %s", err),
 		}
 	}
 
 	req, err := c.NewRequest(b, "POST", "/createRole/")
 	if err != nil {
 		return nil, &AlksError{
-			Err: err,
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
 		}
 	}
 
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, &AlksError{
-			Err: err,
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
 		}
 	}
 
@@ -276,21 +284,27 @@ func (c *Client) CreateIamTrustRole(options *CreateIamRoleOptions) (*IamRoleResp
 
 	if err != nil {
 		return nil, &AlksError{
-			Err: fmt.Errorf("Error encoding IAM create trust role JSON: %s", err),
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        fmt.Errorf("Error encoding IAM create trust role JSON: %s", err),
 		}
 	}
 
 	req, err := c.NewRequest(b, "POST", "/createNonServiceRole/")
 	if err != nil {
 		return nil, &AlksError{
-			Err: err,
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
 		}
 	}
 
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, &AlksError{
-			Err: err,
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
 		}
 	}
 
@@ -377,19 +391,25 @@ func (c *Client) UpdateIamRole(options *UpdateIamRoleRequest) (*UpdateIamRoleRes
 	}{*options, c.AccountDetails})
 	if err != nil {
 		return nil, &AlksError{
-			Err: err,
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
 		}
 	}
 	req, err := c.NewRequest(b, "PATCH", "/role/")
 	if err != nil {
 		return nil, &AlksError{
-			Err: err,
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
 		}
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, &AlksError{
-			Err: err,
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
 		}
 	}
 
@@ -464,21 +484,27 @@ func (c *Client) DeleteIamRole(id string) *AlksError {
 
 	if err != nil {
 		return &AlksError{
-			Err: fmt.Errorf("Error encoding IAM delete role JSON: %s", err),
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        fmt.Errorf("Error encoding IAM delete role JSON: %s", err),
 		}
 	}
 
 	req, err := c.NewRequest(b, "POST", "/deleteRole/")
 	if err != nil {
 		return &AlksError{
-			Err: err,
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
 		}
 	}
 
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return &AlksError{
-			Err: err,
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
 		}
 	}
 
@@ -549,21 +575,27 @@ func (c *Client) GetIamRole(roleName string) (*GetIamRoleResponse, *AlksError) {
 
 	if err != nil {
 		return nil, &AlksError{
-			Err: fmt.Errorf("Error encoding IAM get role JSON: %s", err),
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        fmt.Errorf("Error encoding IAM get role JSON: %s", err),
 		}
 	}
 
 	req, err := c.NewRequest(b, "POST", "/getAccountRole/")
 	if err != nil {
 		return nil, &AlksError{
-			Err: err,
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
 		}
 	}
 
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, &AlksError{
-			Err: err,
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
 		}
 	}
 
@@ -643,21 +675,27 @@ func (c *Client) AddRoleMachineIdentity(roleARN string) (*MachineIdentityRespons
 
 	if err != nil {
 		return nil, &AlksError{
-			Err: fmt.Errorf("Error encoding add role machine identity JSON: %s", err),
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        fmt.Errorf("Error encoding add role machine identity JSON: %s", err),
 		}
 	}
 
 	req, err := c.NewRequest(b, "POST", "/roleMachineIdentity/")
 	if err != nil {
 		return nil, &AlksError{
-			Err: err,
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
 		}
 	}
 
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, &AlksError{
-			Err: err,
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
 		}
 	}
 
@@ -724,21 +762,27 @@ func (c *Client) DeleteRoleMachineIdentity(roleARN string) (*MachineIdentityResp
 
 	if err != nil {
 		return nil, &AlksError{
-			Err: fmt.Errorf("Error encoding delete role machine identity JSON: %s", err),
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        fmt.Errorf("Error encoding delete role machine identity JSON: %s", err),
 		}
 	}
 
 	req, err := c.NewRequest(b, "DELETE", "/roleMachineIdentity/")
 	if err != nil {
 		return nil, &AlksError{
-			Err: err,
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
 		}
 	}
 
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, &AlksError{
-			Err: err,
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
 		}
 	}
 
@@ -805,21 +849,27 @@ func (c *Client) SearchRoleMachineIdentity(roleARN string) (*MachineIdentityResp
 
 	if err != nil {
 		return nil, &AlksError{
-			Err: fmt.Errorf("Error decoding search role machine identity JSON: %s", err),
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        fmt.Errorf("Error decoding search role machine identity JSON: %s", err),
 		}
 	}
 
 	req, err := c.NewRequest(b, "POST", "/roleMachineIdentity/search/")
 	if err != nil {
 		return nil, &AlksError{
-			Err: err,
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
 		}
 	}
 
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, &AlksError{
-			Err: err,
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
 		}
 	}
 
