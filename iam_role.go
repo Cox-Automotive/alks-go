@@ -382,7 +382,7 @@ func (c *Client) UpdateIamRole(options *UpdateIamRoleRequest) (*UpdateIamRoleRes
 		return nil, &AlksError{
 			StatusCode: 0,
 			RequestId:  "",
-			Err: err,
+			Err:        err,
 		}
 	}
 	log.Printf("[INFO] update IAM role %s with Tags: %v", *options.RoleName, *options.Tags)

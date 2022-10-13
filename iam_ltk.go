@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
+
+	// "net/http"
 	"strings"
 )
 
@@ -16,14 +17,18 @@ type IamUser struct {
 	Tags      []Tag  `json:"tags"`
 }
 
+
+
 // GetIamUsersResponse is used to represent the list of long term keys
-type GetIamUsersResponse struct {
-	BaseResponse
-	Users []IamUser `json:"items"`
-}
+// This type will be used for the new iam-user endpoint when it's created
+// type GetIamUsersResponse struct {
+// 	BaseResponse
+// 	Users []IamUser `json:"items"`
+// }
 
 // GetIamUserResponse is used to represent a single long term key.
 type GetIamUserResponse struct {
+	BaseResponse
 	User IamUser `json:"item"`
 }
 
@@ -32,11 +37,25 @@ type CreateIamUserOptions struct {
 	Tags        *[]Tag
 }
 
-// CreateIamUserRequest is used to represent the request body to create or delete LTKs
-type CreateIamUserRequest struct {
-	IamUserName string `json:"iamUserName"`
-	Tags        []Tag  `json:"tags,omitempty"`
-}
+
+//These types will be used for the new iam-user endpoint when it's created. 
+// type IamUserWithSecret struct {
+// 	IamUser   IamUser
+// 	SecretKey string `json:"secretKey"`
+// }
+//
+// type CreateIamUserRequest struct {
+// 	User struct {
+// 		IamUserName string `json:"userName"`
+// 		Tags        []Tag  `json:"tags,omitempty"`
+// 	} `json:"user"`
+// }
+//
+// // CreateIamUserResponse is the response to the CLI client
+// type CreateIamUserResponse struct {
+// 	BaseResponse
+// 	User IamUserWithSecret `json:"items"`
+// }
 
 // DeleteIamUserRequest is used to represent the request body to delete LTKs
 type DeleteIamUserRequest struct {
@@ -49,11 +68,6 @@ type DeleteIamUserResponse struct {
 	IamUserName string `json:"iamUserName"`
 }
 
-// CreateIamUserResponse is the response to the CLI client
-type CreateIamUserResponse struct {
-	User      IamUser
-	SecretKey string
-}
 type UpdateIamUserRequest struct {
 	IamUserName *string `json:"userName"`
 	Tags        *[]Tag  `json:"tags"`
@@ -151,8 +165,6 @@ func (c *Client) GetIamUsers() (*GetIamUsersResponse, *AlksError) {
 func (c *Client) GetIamUser(iamUsername string) (*GetIamUserResponse, error) {
 	log.Printf("[INFO] Getting long term key")
 
-	
-
 	accountID, err := c.AccountDetails.GetAccountNumber()
 	if err != nil {
 		return nil, &AlksError{
@@ -162,7 +174,7 @@ func (c *Client) GetIamUser(iamUsername string) (*GetIamUserResponse, error) {
 		}
 	}
 
-	req, err := c.NewRequest(nil, "GET", "/iam-users/id/" + accountID + "/" +iamUsername)
+	req, err := c.NewRequest(nil, "GET", "/iam-users/id/"+accountID+"/"+iamUsername)
 
 	if err != nil {
 		return nil, &AlksError{
@@ -188,8 +200,8 @@ func (c *Client) GetIamUser(iamUsername string) (*GetIamUserResponse, error) {
 		err = decodeBody(resp, &keyErr)
 		if err != nil {
 			return nil, &AlksError{
-				StatusCode: 0,
-				RequestId:  "",
+				StatusCode: resp.StatusCode,
+				RequestId:  reqID,
 				Err:        fmt.Errorf(ParseErrorReqId, reqID, err),
 			}
 		}
@@ -197,32 +209,30 @@ func (c *Client) GetIamUser(iamUsername string) (*GetIamUserResponse, error) {
 		if keyErr.Errors != nil {
 			if reqID := GetRequestID(resp); reqID != "" {
 				return nil, &AlksError{
-					StatusCode: 0,
-					RequestId:  "",
+					StatusCode: resp.StatusCode,
+					RequestId:  reqID,
 					Err:        fmt.Errorf(ErrorStringFull, reqID, resp.StatusCode, keyErr.Errors),
 				}
 			}
 		}
 
-		if reqID := GetRequestID(resp); reqID != "" {
-			return nil, fmt.Errorf(ErrorStringOnlyCodeAndReqId, reqID, resp.StatusCode)
+		return nil, &AlksError{
+			StatusCode: resp.StatusCode,
+			RequestId:  reqID,
+			Err:        fmt.Errorf(ErrorStringOnlyCodeAndReqId, reqID, resp.StatusCode),
 		}
-
-		return nil, fmt.Errorf(ErrorStringOnlyCode, resp.StatusCode)
 	}
 
 	cr := new(GetIamUserResponse)
 	err = decodeBody(resp, &cr)
 
 	if err != nil {
-		if reqID := GetRequestID(resp); reqID != "" {
-			return nil, fmt.Errorf("error parsing GetLongTermKeyResponse: [%s] %s", reqID, err)
+		return nil, &AlksError{
+			StatusCode: resp.StatusCode,
+			RequestId:  reqID,
+			Err:        fmt.Errorf("error parsing GetLongTermKeyResponse: [%s] %s", reqID, err),
 		}
 	}
-
-	// if cr.RequestFailed() {
-	// 	return nil, fmt.Errorf("error getting long term keys: [%s] %s", cr.BaseResponse.RequestID, strings.Join(cr.GetErrors(), ", "))
-	// }
 
 	return cr, nil
 }
@@ -232,17 +242,20 @@ func NewLongTermKeyRequest(options *CreateIamUserOptions) (*CreateIamUserRequest
 		return nil, fmt.Errorf("IamUserName option must not be nil")
 	}
 
-	ltk := &CreateIamUserRequest{
-		IamUserName: *options.IamUserName,
-	}
+	// iamUser := &CreateIamUserRequest{
+	// 	User:{IamUserName: *options.IamUserName,},
+	// }
+
+	iamUser := &CreateIamUserRequest{}
+	iamUser.User.IamUserName = *options.IamUserName
 
 	if options.Tags != nil {
-		ltk.Tags = *options.Tags
+		iamUser.User.Tags = *options.Tags
 	} else {
-		ltk.Tags = nil
+		iamUser.User.Tags = nil
 	}
 
-	return ltk, nil
+	return iamUser, nil
 }
 
 // CreateLongTermKey creates an LTK user for an account.
@@ -250,16 +263,30 @@ func NewLongTermKeyRequest(options *CreateIamUserOptions) (*CreateIamUserRequest
 func (c *Client) CreateLongTermKey(options *CreateIamUserOptions) (*CreateIamUserResponse, error) {
 	request, err := NewLongTermKeyRequest(options)
 	if err != nil {
-		return nil, err
+		return nil, &AlksError{
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
+		}
 	}
 	log.Printf("[INFO] Creating long term key: %s", *options.IamUserName)
+	log.Printf("[INFO] The request body is %v", *request)
+
+	accountID, err := c.AccountDetails.GetAccountNumber()
+	if err != nil {
+		return nil, &AlksError{
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        fmt.Errorf("Error reading Account value: %s", err),
+		}
+	}
 
 	// request.AccountDetails = c.AccountDetails
 
 	b, err := json.Marshal(struct {
 		CreateIamUserRequest
-		AccountDetails
-	}{*request, c.AccountDetails})
+	}{*request})
+	log.Printf("[INFO] The byte array is %#v\n %s", string(b), string(b))
 
 	// request := LongTermKeyRequest{
 	// 	AccountDetails: c.AccountDetails,
@@ -269,60 +296,70 @@ func (c *Client) CreateLongTermKey(options *CreateIamUserOptions) (*CreateIamUse
 	// reqBody, err := json.Marshal(request)
 
 	if err != nil {
-		return nil, fmt.Errorf("error encoding LTK create JSON: %s", err)
+		return nil, &AlksError{
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        fmt.Errorf("error encoding LTK create JSON: %s", err),
+		}
 	}
 
-	req, err := c.NewRequest(b, "POST", "/accessKeys")
+	req, err := c.NewRequest(b, "POST", "/iam-users/id/"+accountID)
 	if err != nil {
-		return nil, err
+		return nil, &AlksError{
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
+		}
 	}
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, &AlksError{
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
+		}
 	}
+
+	reqID := GetRequestID(resp)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		keyErr := new(AlksResponseError)
 		err = decodeBody(resp, &keyErr)
-		if err != nil {
-			if reqID := GetRequestID(resp); reqID != "" {
-				return nil, fmt.Errorf(ParseErrorReqId, reqID, err)
-			}
 
-			return nil, fmt.Errorf(ParseError, err)
+		if err != nil {
+			return nil, &AlksError{
+				StatusCode: resp.StatusCode,
+				RequestId:  reqID,
+				Err:        fmt.Errorf(ParseErrorReqId, reqID, err),
+			}
 		}
 
 		if keyErr.Errors != nil {
-			if reqID := GetRequestID(resp); reqID != "" {
-				return nil, fmt.Errorf(ErrorStringFull, reqID, resp.StatusCode, keyErr.Errors)
+			return nil, &AlksError{
+				StatusCode: resp.StatusCode,
+				RequestId:  reqID,
+				Err:        fmt.Errorf(ErrorStringFull, reqID, resp.StatusCode, keyErr.Errors),
 			}
-
-			return nil, fmt.Errorf(ErrorStringNoReqId, resp.StatusCode, keyErr.Errors)
 		}
 
-		if reqID := GetRequestID(resp); reqID != "" {
-			return nil, fmt.Errorf(ErrorStringOnlyCodeAndReqId, reqID, resp.StatusCode)
+		return nil, &AlksError{
+			StatusCode: resp.StatusCode,
+			RequestId:  reqID,
+			Err:        fmt.Errorf(ErrorStringOnlyCodeAndReqId, reqID, resp.StatusCode),
 		}
-
-		return nil, fmt.Errorf(ErrorStringOnlyCode, resp.StatusCode)
 	}
 
 	cr := new(CreateIamUserResponse)
 	err = decodeBody(resp, &cr)
 
 	if err != nil {
-		if reqID := GetRequestID(resp); reqID != "" {
-			return nil, fmt.Errorf("error parsing CreateLongTermKeyResponse: [%s] %s", reqID, err)
+		return nil, &AlksError{
+			StatusCode: resp.StatusCode,
+			RequestId:  reqID,
+			Err:        fmt.Errorf("error parsing CreateLongTermKeyResponse: [%s] %s", reqID, err),
 		}
-
-		return nil, fmt.Errorf("error parsing CreateLongTermKeyResponse: %s", err)
 	}
-
-	// if cr.RequestFailed() {
-	// 	return nil, fmt.Errorf("error creating long term key: [%s] %s", cr.BaseResponse.RequestID, strings.Join(cr.GetErrors(), ", "))
-	// }
-
 	return cr, nil
 }
 
