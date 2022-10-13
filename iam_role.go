@@ -380,6 +380,8 @@ type UpdateIamRoleResponse struct {
 func (c *Client) UpdateIamRole(options *UpdateIamRoleRequest) (*UpdateIamRoleResponse, *AlksError) {
 	if err := options.updateIamRoleValidate(); err != nil {
 		return nil, &AlksError{
+			StatusCode: 0,
+			RequestId:  "",
 			Err: err,
 		}
 	}
