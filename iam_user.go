@@ -86,7 +86,9 @@ type DeleteIamUserResponse struct {
 }
 
 type UpdateIamUserRequest struct {
-	Tags []Tag `json:"tags"`
+	User struct {
+		Tags []Tag `json:"tags,omitempty"`
+	} `json:"user"`
 }
 
 type UpdateIamUserResponse struct {
@@ -451,7 +453,7 @@ func NewUpdateIamUserRequest(options *IamUserOptions) (*UpdateIamUserRequest, er
 	iamUser := &UpdateIamUserRequest{}
 
 	if options.Tags != nil {
-		iamUser.Tags = *options.Tags
+		iamUser.User.Tags = *options.Tags
 	} else {
 		return nil, fmt.Errorf("Tags must not be nil on update request, include empty list to remove all non-protected tags")
 	}
