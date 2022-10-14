@@ -9,6 +9,7 @@ import (
 	"strings"
 )
 
+//Represents iamUser returned by iam-user endpoint
 type IamUser struct {
 	ARN       string `json:"arn"`
 	AccountId string `json:"accountId"`
@@ -17,14 +18,19 @@ type IamUser struct {
 	Tags      []Tag  `json:"tags"`
 }
 
-
+// AllIamUsersResponseType represents iamUser returned by ltks endpoint
+type AllIamUsersResponseType struct {
+	UserName    string `json:"userName"`
+	AccessKeyID string `json:"accessKeyId"`
+	Status      string `json:"status"`
+	CreateDate  string `json:"createDate"`
+}
 
 // GetIamUsersResponse is used to represent the list of long term keys
-// This type will be used for the new iam-user endpoint when it's created
-// type GetIamUsersResponse struct {
-// 	BaseResponse
-// 	Users []IamUser `json:"items"`
-// }
+type GetIamUsersResponse struct {
+	BaseResponse
+	IamUsers []AllIamUsersResponseType `json:"longTermKeys"`
+}
 
 // GetIamUserResponse is used to represent a single long term key.
 type GetIamUserResponse struct {
@@ -32,30 +38,40 @@ type GetIamUserResponse struct {
 	User IamUser `json:"item"`
 }
 
-type CreateIamUserOptions struct {
+// BaseIamUserResponse encapsulates shared response fields
+type BaseIamUserResponse struct {
+	Action              string `json:"action,omitempty"`
+	AddedIAMUserToGroup bool   `json:"addedIAMUserToGroup,omitempty"`
+	PartialError        bool   `json:"partialError,omitempty"`
+}
+
+// CreateIamUserApiResponse represents the response from API
+type CreateIamUserApiResponse struct {
+	IAMUserName string `json:"iamUserName"`
+	IAMUserArn  string `json:"iamUserArn"`
+	AccessKey   string `json:"accessKey"`
+	SecretKey   string `json:"secretKey"`
+}
+
+type CreateIamUserRequest struct {
+	AccountDetails
+	IamUserName string `json:"iamUserName"`
+	Tags        []Tag  `json:"tags,omitempty"`
+}
+
+// CreateIamUserResponse is the response to the CLI client
+type CreateIamUserResponse struct {
+	AccountDetails
+	BaseResponse
+	BaseIamUserResponse
+	CreateIamUserApiResponse
+}
+
+//Used as options for create and update iamUser
+type IamUserOptions struct {
 	IamUserName *string
 	Tags        *[]Tag
 }
-
-
-//These types will be used for the new iam-user endpoint when it's created. 
-// type IamUserWithSecret struct {
-// 	IamUser   IamUser
-// 	SecretKey string `json:"secretKey"`
-// }
-//
-// type CreateIamUserRequest struct {
-// 	User struct {
-// 		IamUserName string `json:"userName"`
-// 		Tags        []Tag  `json:"tags,omitempty"`
-// 	} `json:"user"`
-// }
-//
-// // CreateIamUserResponse is the response to the CLI client
-// type CreateIamUserResponse struct {
-// 	BaseResponse
-// 	User IamUserWithSecret `json:"items"`
-// }
 
 // DeleteIamUserRequest is used to represent the request body to delete LTKs
 type DeleteIamUserRequest struct {
@@ -65,15 +81,16 @@ type DeleteIamUserRequest struct {
 
 type DeleteIamUserResponse struct {
 	AccountDetails
-	IamUserName string `json:"iamUserName"`
+	BaseResponse
+	BaseIamUserResponse
 }
 
 type UpdateIamUserRequest struct {
-	IamUserName *string `json:"userName"`
-	Tags        *[]Tag  `json:"tags"`
+	Tags []Tag `json:"tags"`
 }
 
 type UpdateIamUserResponse struct {
+	BaseResponse
 	User IamUser `json:"item"`
 }
 
@@ -91,16 +108,16 @@ func (c *Client) GetIamUsers() (*GetIamUsersResponse, *AlksError) {
 		}
 	}
 
-	// roleName, err := c.AccountDetails.GetRoleName(false)
-	// if err != nil {
-	// 	return nil, &AlksError{
-	// 		StatusCode: 0,
-	// 		RequestId:  "",
-	// 		Err: fmt.Errorf("Error reading Role value: %s", err),
-	// 	}
-	// }
+	roleName, err := c.AccountDetails.GetRoleName(false)
+	if err != nil {
+		return nil, &AlksError{
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        fmt.Errorf("Error reading Role value: %s", err),
+		}
+	}
 
-	req, err := c.NewRequest(nil, "GET", "/iam-users/id/"+accountID)
+	req, err := c.NewRequest(nil, "GET", "/ltks/"+accountID+"/"+roleName)
 	if err != nil {
 		return nil, &AlksError{
 			StatusCode: 0,
@@ -162,7 +179,7 @@ func (c *Client) GetIamUsers() (*GetIamUsersResponse, *AlksError) {
 
 // GetIamUser gets a single LTK for an account
 // If no error is returned, then you will receive an LTK for the given account.
-func (c *Client) GetIamUser(iamUsername string) (*GetIamUserResponse, error) {
+func (c *Client) GetIamUser(iamUsername string) (*GetIamUserResponse, *AlksError) {
 	log.Printf("[INFO] Getting long term key")
 
 	accountID, err := c.AccountDetails.GetAccountNumber()
@@ -237,31 +254,28 @@ func (c *Client) GetIamUser(iamUsername string) (*GetIamUserResponse, error) {
 	return cr, nil
 }
 
-func NewLongTermKeyRequest(options *CreateIamUserOptions) (*CreateIamUserRequest, error) {
+func NewCreateIamUserRequest(options *IamUserOptions) (*CreateIamUserRequest, error) {
 	if options.IamUserName == nil {
 		return nil, fmt.Errorf("IamUserName option must not be nil")
 	}
 
-	// iamUser := &CreateIamUserRequest{
-	// 	User:{IamUserName: *options.IamUserName,},
-	// }
-
 	iamUser := &CreateIamUserRequest{}
-	iamUser.User.IamUserName = *options.IamUserName
+	iamUser.IamUserName = *options.IamUserName
 
 	if options.Tags != nil {
-		iamUser.User.Tags = *options.Tags
+		iamUser.Tags = *options.Tags
 	} else {
-		iamUser.User.Tags = nil
+		iamUser.Tags = nil
 	}
 
 	return iamUser, nil
 }
 
-// CreateLongTermKey creates an LTK user for an account.
+// CreateIamUser creates an iamUser and secret key for an account.
 // If no error is returned, then you will receive an appropriate success message.
-func (c *Client) CreateLongTermKey(options *CreateIamUserOptions) (*CreateIamUserResponse, error) {
-	request, err := NewLongTermKeyRequest(options)
+func (c *Client) CreateIamUser(options *IamUserOptions) (*CreateIamUserResponse, *AlksError) {
+	request, err := NewCreateIamUserRequest(options)
+
 	if err != nil {
 		return nil, &AlksError{
 			StatusCode: 0,
@@ -270,30 +284,14 @@ func (c *Client) CreateLongTermKey(options *CreateIamUserOptions) (*CreateIamUse
 		}
 	}
 	log.Printf("[INFO] Creating long term key: %s", *options.IamUserName)
+
+	request.AccountDetails = c.AccountDetails
+
 	log.Printf("[INFO] The request body is %v", *request)
-
-	accountID, err := c.AccountDetails.GetAccountNumber()
-	if err != nil {
-		return nil, &AlksError{
-			StatusCode: 0,
-			RequestId:  "",
-			Err:        fmt.Errorf("Error reading Account value: %s", err),
-		}
-	}
-
-	// request.AccountDetails = c.AccountDetails
 
 	b, err := json.Marshal(struct {
 		CreateIamUserRequest
 	}{*request})
-	log.Printf("[INFO] The byte array is %#v\n %s", string(b), string(b))
-
-	// request := LongTermKeyRequest{
-	// 	AccountDetails: c.AccountDetails,
-	// 	IamUserName:    iamUsername,
-	// }
-
-	// reqBody, err := json.Marshal(request)
 
 	if err != nil {
 		return nil, &AlksError{
@@ -303,7 +301,9 @@ func (c *Client) CreateLongTermKey(options *CreateIamUserOptions) (*CreateIamUse
 		}
 	}
 
-	req, err := c.NewRequest(b, "POST", "/iam-users/id/"+accountID)
+	log.Printf("[INFO] The byte array is %#v\n %s", string(b), string(b))
+
+	req, err := c.NewRequest(b, "POST", "/accessKeys")
 	if err != nil {
 		return nil, &AlksError{
 			StatusCode: 0,
@@ -363,9 +363,9 @@ func (c *Client) CreateLongTermKey(options *CreateIamUserOptions) (*CreateIamUse
 	return cr, nil
 }
 
-// DeleteLongTermKey deletes an LTK user for an account.
+// DeleteIamUser deletes an LTK user for an account.
 // If no error is returned, then you will receive an appropriate success message.
-func (c *Client) DeleteLongTermKey(iamUsername string) (*DeleteIamUserResponse, error) {
+func (c *Client) DeleteIamUser(iamUsername string) (*DeleteIamUserResponse, *AlksError) {
 	log.Printf("[INFO] Deleting long term key: %s", iamUsername)
 
 	request := DeleteIamUserRequest{
@@ -376,133 +376,175 @@ func (c *Client) DeleteLongTermKey(iamUsername string) (*DeleteIamUserResponse, 
 	reqBody, err := json.Marshal(request)
 
 	if err != nil {
-		return nil, fmt.Errorf("error encoding LTK delete JSON: %s", err)
+		return nil, &AlksError{
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        fmt.Errorf("error encoding iamUser delete JSON: %s", err),
+		}
 	}
 
 	req, err := c.NewRequest(reqBody, "DELETE", "/IAMUser")
 	if err != nil {
-		return nil, err
+		return nil, &AlksError{
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
+		}
 	}
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, &AlksError{
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
+		}
 	}
+
+	reqID := GetRequestID(resp)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		keyErr := new(AlksResponseError)
 		err = decodeBody(resp, &keyErr)
 		if err != nil {
-			if reqID := GetRequestID(resp); reqID != "" {
-				return nil, fmt.Errorf(ParseErrorReqId, reqID, err)
+			return nil, &AlksError{
+				StatusCode: resp.StatusCode,
+				RequestId:  reqID,
+				Err:        fmt.Errorf(ParseErrorReqId, reqID, err),
 			}
-
-			return nil, fmt.Errorf(ParseError, err)
 		}
 
 		if keyErr.Errors != nil {
-			if reqID := GetRequestID(resp); reqID != "" {
-				return nil, fmt.Errorf(ErrorStringFull, reqID, resp.StatusCode, keyErr.Errors)
+			return nil, &AlksError{
+				StatusCode: resp.StatusCode,
+				RequestId:  reqID,
+				Err:        fmt.Errorf(ErrorStringNoReqId, resp.StatusCode, keyErr.Errors),
 			}
-
-			return nil, fmt.Errorf(ErrorStringNoReqId, resp.StatusCode, keyErr.Errors)
 		}
-
-		if reqID := GetRequestID(resp); reqID != "" {
-			return nil, fmt.Errorf(ErrorStringOnlyCodeAndReqId, reqID, resp.StatusCode)
+		return nil, &AlksError{
+			StatusCode: resp.StatusCode,
+			RequestId:  reqID,
+			Err:        fmt.Errorf(ErrorStringOnlyCodeAndReqId, reqID, resp.StatusCode),
 		}
-
-		return nil, fmt.Errorf(ErrorStringOnlyCode, resp.StatusCode)
 	}
 
 	cr := new(DeleteIamUserResponse)
 	err = decodeBody(resp, &cr)
 
 	if err != nil {
-		if reqID := GetRequestID(resp); reqID != "" {
-			return nil, fmt.Errorf("error parsing DeleteLongTermKeyResponse: [%s] %s", reqID, err)
+		return nil, &AlksError{
+			StatusCode: resp.StatusCode,
+			RequestId:  reqID,
+			Err:        fmt.Errorf("error parsing DeleteLongTermKeyResponse: [%s] %s", reqID, err),
 		}
-
-		return nil, fmt.Errorf("error parsing DeleteLongTermKeyResponse: %s", err)
 	}
-
-	// if cr.RequestFailed() {
-	// 	return nil, fmt.Errorf("error deleting long term key: [%s] %s", cr.BaseResponse.RequestID, strings.Join(cr.GetErrors(), ", "))
-	// }
-
 	return cr, nil
-
 }
 
-func (c *Client) UpdateLongTermKey(options *UpdateIamUserRequest) (*UpdateIamUserResponse, error) {
-	if err := options.updateLongTermKeyValidate(); err != nil {
-		return nil, err
+func NewUpdateIamUserRequest(options *IamUserOptions) (*UpdateIamUserRequest, error) {
+	if options.IamUserName == nil {
+		return nil, fmt.Errorf("IamUserName option must not be nil")
+	} else if *options.IamUserName == "" {
+		return nil, fmt.Errorf("IamUserName must contain a value")
 	}
-	log.Printf("[INFO] update LTK %s with Tags: %v", *options.IamUserName, *options.Tags)
 
-	b, err := json.Marshal(struct {
-		UpdateIamUserRequest
-		AccountDetails
-	}{*options, c.AccountDetails})
-	if err != nil {
-		return nil, err
+	iamUser := &UpdateIamUserRequest{}
+
+	if options.Tags != nil {
+		iamUser.Tags = *options.Tags
+	} else {
+		return nil, fmt.Errorf("Tags must not be nil on update request, include empty list to remove all non-protected tags")
 	}
-	req, err := c.NewRequest(b, "PATCH", "/IAMUser/")
+
+	return iamUser, nil
+}
+
+func (c *Client) UpdateIamUser(options *IamUserOptions) (*UpdateIamUserResponse, *AlksError) {
+	request, err := NewUpdateIamUserRequest(options)
+
 	if err != nil {
-		return nil, err
+		return nil, &AlksError{
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
+		}
+	}
+
+	log.Printf("[INFO] update IamUser %s with Tags: %v", *options.IamUserName, *options.Tags)
+
+	accountID, err := c.AccountDetails.GetAccountNumber()
+	if err != nil {
+		return nil, &AlksError{
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        fmt.Errorf("Error reading Account value: %s", err),
+		}
+	}
+
+	b, err := json.Marshal(request)
+
+	if err != nil {
+		return nil, &AlksError{
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
+		}
+	}
+	req, err := c.NewRequest(b, "PATCH", "/iam-user/id/"+accountID+"/"+*options.IamUserName)
+	if err != nil {
+		return nil, &AlksError{
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
+		}
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, &AlksError{
+			StatusCode: 0,
+			RequestId:  "",
+			Err:        err,
+		}
 	}
+
+	reqID := GetRequestID(resp)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		updateErr := new(AlksResponseError)
 		err = decodeBody(resp, &updateErr)
 
 		if err != nil {
-			if reqID := GetRequestID(resp); reqID != "" {
-				return nil, fmt.Errorf(ParseErrorReqId, reqID, err)
+			return nil, &AlksError{
+				StatusCode: resp.StatusCode,
+				RequestId:  reqID,
+				Err:        fmt.Errorf(ParseErrorReqId, reqID, err),
 			}
-
-			return nil, fmt.Errorf(ParseError, err)
 		}
 
 		if updateErr.Errors != nil {
-			if reqID := GetRequestID(resp); reqID != "" {
-				return nil, fmt.Errorf(ErrorStringFull, reqID, resp.StatusCode, updateErr.Errors)
+			return nil, &AlksError{
+				StatusCode: resp.StatusCode,
+				RequestId:  reqID,
+				Err:        fmt.Errorf(ErrorStringNoReqId, resp.StatusCode, updateErr.Errors),
 			}
-
-			return nil, fmt.Errorf(ErrorStringNoReqId, resp.StatusCode, updateErr.Errors)
 		}
 
-		if reqID := GetRequestID(resp); reqID != "" {
-			return nil, fmt.Errorf(ErrorStringOnlyCodeAndReqId, reqID, resp.StatusCode)
+		return nil, &AlksError{
+			StatusCode: resp.StatusCode,
+			RequestId:  reqID,
+			Err:        fmt.Errorf(ErrorStringOnlyCodeAndReqId, reqID, resp.StatusCode),
 		}
 
-		return nil, fmt.Errorf(ErrorStringOnlyCode, resp.StatusCode)
 	}
 
 	respObj := &UpdateIamUserResponse{}
 	if err = decodeBody(resp, respObj); err != nil {
-		if reqID := GetRequestID(resp); reqID != "" {
-			return nil, fmt.Errorf("error parsing update ltk response: [%s] %s", reqID, err)
+		return nil, &AlksError{
+			StatusCode: resp.StatusCode,
+			RequestId:  reqID,
+			Err:        fmt.Errorf("error parsing update ltk response: %s", err),
 		}
-		return nil, fmt.Errorf("error parsing update ltk response: %s", err)
 	}
-	// if respObj.RequestFailed() {
-	// 	return nil, fmt.Errorf("error from update IAM ltk request: [%s] %s", respObj.RequestID, strings.Join(respObj.GetErrors(), ", "))
-	// }
 
 	return respObj, nil
-}
-
-func (req *UpdateIamUserRequest) updateLongTermKeyValidate() error {
-	if req.IamUserName == nil {
-		return fmt.Errorf("User name option must not be nil")
-	}
-	if req.Tags == nil {
-		return fmt.Errorf("tags option must not be nil")
-	}
-	return nil
 }
