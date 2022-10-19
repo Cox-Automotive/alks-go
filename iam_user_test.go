@@ -27,7 +27,6 @@ func (s *S) Test_GetIamUserNoTags(c *C) {
 
 }
 
-
 func (s *S) Test_GetLongTermKeyWithTags(c *C) {
 	testServer.Response(202, nil, iamUserWithTags)
 
@@ -90,7 +89,6 @@ func (s *S) Test_CreateLongTermKeysNoTags(c *C) {
 		PartialError:        false,
 	})
 }
-
 
 func (s *S) Test_CreateIamUserWithTags(c *C) {
 	testServer.Response(202, nil, createIamUserWithTags)
@@ -217,7 +215,6 @@ var deleteIamUser = `
 }
 `
 
-
 var iamUsers = `
 {
 	"longTermKeys": [
@@ -241,7 +238,6 @@ var updateIamUserNoTags = `
 	}
 }
 `
-
 
 var iamUser = `
 {

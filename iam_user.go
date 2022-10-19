@@ -87,7 +87,7 @@ type DeleteIamUserResponse struct {
 
 type UpdateIamUserRequest struct {
 	User struct {
-		Tags []Tag `json:"tags,omitempty"`
+		Tags []Tag `json:"tags"`
 	} `json:"user"`
 }
 
@@ -303,9 +303,10 @@ func (c *Client) CreateIamUser(options *IamUserOptions) (*CreateIamUserResponse,
 		}
 	}
 
-	log.Printf("[INFO] The byte array is %#v\n %s", string(b), string(b))
+	log.Printf("[INFO] Request Body: %v", string(b))
 
 	req, err := c.NewRequest(b, "POST", "/accessKeys")
+
 	if err != nil {
 		return nil, &AlksError{
 			StatusCode: 0,
@@ -483,7 +484,11 @@ func (c *Client) UpdateIamUser(options *IamUserOptions) (*UpdateIamUserResponse,
 		}
 	}
 
-	b, err := json.Marshal(request)
+	b, err := json.Marshal(struct {
+		UpdateIamUserRequest
+	}{*request})
+
+	log.Printf("[INFO] Request Body %v:\n", string(b))
 
 	if err != nil {
 		return nil, &AlksError{
@@ -492,7 +497,8 @@ func (c *Client) UpdateIamUser(options *IamUserOptions) (*UpdateIamUserResponse,
 			Err:        err,
 		}
 	}
-	req, err := c.NewRequest(b, "PATCH", "/iam-user/id/"+accountID+"/"+*options.IamUserName)
+	req, err := c.NewRequest(b, "PATCH", "/iam-users/id/"+accountID+"/"+*options.IamUserName)
+
 	if err != nil {
 		return nil, &AlksError{
 			StatusCode: 0,
