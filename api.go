@@ -212,7 +212,7 @@ func (c *Client) Durations() ([]int, error) {
 			if reqID := GetRequestID(resp); reqID != "" {
 				return nil, &AlksError{
 					StatusCode: resp.StatusCode,
-					RequestId:  "",
+					RequestId:  reqID,
 					Err:        fmt.Errorf(ParseErrorReqId, reqID, err),
 				}
 			}
