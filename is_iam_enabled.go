@@ -21,7 +21,7 @@ type IsIamEnabledResponse struct {
 }
 
 // IsIamEnabled will check if a MI, AccountDetails, or STS assumed role is IAM active or not.
-func (c *Client) IsIamEnabled(roleArn string) (*IsIamEnabledResponse, error) {
+func (c *Client) IsIamEnabled(roleArn string) (*IsIamEnabledResponse, *AlksError) {
 
 	if len(roleArn) > 1 {
 		log.Printf("[INFO] Is IAM enabled for MI: %s", roleArn)

@@ -50,7 +50,7 @@ type AccountsResponse struct {
 }
 
 // GetAccounts return a list of AccountRoles for an AWS account
-func (c *Client) GetAccounts() (*AccountsResponse, error) {
+func (c *Client) GetAccounts() (*AccountsResponse, *AlksError) {
 	log.Printf("[INFO] Requesting available accounts from ALKS")
 
 	b, err := json.Marshal(c.Credentials)
@@ -120,7 +120,7 @@ func (c *Client) GetAccounts() (*AccountsResponse, error) {
 // CreateSession will create a new STS session on AWS. If no error is
 // returned then you will receive a SessionResponse object representing
 // your STS session.
-func (c *Client) CreateSession(sessionDuration int, useIAM bool) (*SessionResponse, error) {
+func (c *Client) CreateSession(sessionDuration int, useIAM bool) (*SessionResponse, *AlksError) {
 	log.Printf("[INFO] Creating %v hr session", sessionDuration)
 
 	var found = false

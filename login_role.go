@@ -7,7 +7,7 @@ import (
 )
 
 // GetMyLoginRole returns the LoginRole corresponding to the clients current STS credentials
-func (c *Client) GetMyLoginRole() (*LoginRoleResponse, error) {
+func (c *Client) GetMyLoginRole() (*LoginRoleResponse, *AlksError) {
 	log.Printf("[INFO] Requesting Login Role information from ALKS")
 
 	if !c.IsUsingSTSCredentials() {
@@ -116,7 +116,7 @@ func (c *Client) GetMyLoginRole() (*LoginRoleResponse, error) {
 }
 
 // GetLoginRole returns the login role corresponding to the current account and role stored in AccountDetails
-func (c *Client) GetLoginRole() (*LoginRoleResponse, error) {
+func (c *Client) GetLoginRole() (*LoginRoleResponse, *AlksError) {
 	// If the client is configured with STS call the correct method
 	if c.IsUsingSTSCredentials() {
 		log.Println("[INFO] Client configured with STS credentials, dispatching to GetMyLoginRole instead")
