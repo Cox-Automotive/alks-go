@@ -113,21 +113,13 @@ func (c *Client) NewRequest(json []byte, method string, endpoint string) (*http.
 	u, err := url.Parse(c.BaseURL + endpoint)
 
 	if err != nil {
-		return nil, &AlksError{
-			StatusCode: 0,
-			RequestId:  "",
-			Err:        fmt.Errorf("Error parsing base URL: %s", err),
-		}
+		return nil, fmt.Errorf("Error parsing base URL: %s", err)
 	}
 
 	req, err := http.NewRequest(method, u.String(), bytes.NewBuffer(json))
 
 	if err != nil {
-		return nil, &AlksError{
-			StatusCode: 0,
-			RequestId:  "",
-			Err:        fmt.Errorf("Error creating request: %s", err),
-		}
+		return nil, fmt.Errorf("Error creating request: %s", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -135,11 +127,7 @@ func (c *Client) NewRequest(json []byte, method string, endpoint string) (*http.
 	err = c.Credentials.InjectAuth(req)
 
 	if err != nil {
-		return nil, &AlksError{
-			StatusCode: 0,
-			RequestId:  "",
-			Err:        fmt.Errorf("Error adding configuring authentication: %s", err),
-		}
+		return nil, fmt.Errorf("Error adding configuring authentication: %s", err)
 	}
 
 	log.Println("------- ALKS HTTP Request -------")
@@ -198,11 +186,7 @@ func (c *Client) Durations() ([]int, error) {
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, &AlksError{
-			StatusCode: resp.StatusCode,
-			RequestId:  "",
-			Err:        err,
-		}
+		return nil, err
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -210,76 +194,39 @@ func (c *Client) Durations() ([]int, error) {
 		err = decodeBody(resp, &durationErr)
 		if err != nil {
 			if reqID := GetRequestID(resp); reqID != "" {
-				return nil, &AlksError{
-					StatusCode: resp.StatusCode,
-					RequestId:  reqID,
-					Err:        fmt.Errorf(ParseErrorReqId, reqID, err),
-				}
+				return nil, fmt.Errorf(ParseErrorReqId, reqID, err)
 			}
 
-			return nil, &AlksError{
-				StatusCode: resp.StatusCode,
-				RequestId:  "",
-				Err:        fmt.Errorf(ParseError, err),
-			}
+			return nil, fmt.Errorf(ParseError, err)
 		}
 
 		if durationErr.Errors != nil {
 			if reqID := GetRequestID(resp); reqID != "" {
-				return nil, &AlksError{
-					StatusCode: resp.StatusCode,
-					RequestId:  reqID,
-					Err:        fmt.Errorf(ErrorStringFull, reqID, resp.StatusCode, durationErr.Errors),
-				}
+				return nil, fmt.Errorf(ErrorStringFull, reqID, resp.StatusCode, durationErr.Errors)
 			}
 
-			return nil, &AlksError{
-				StatusCode: resp.StatusCode,
-				RequestId:  "",
-				Err:        fmt.Errorf(ErrorStringNoReqId, resp.StatusCode, durationErr.Errors),
-			}
+			return nil, fmt.Errorf(ErrorStringNoReqId, resp.StatusCode, durationErr.Errors)
 		}
 
 		if reqID := GetRequestID(resp); reqID != "" {
-			return nil, &AlksError{
-				StatusCode: resp.StatusCode,
-				RequestId:  reqID,
-				Err:        fmt.Errorf(ErrorStringOnlyCodeAndReqId, reqID, resp.StatusCode),
-			}
+			return nil, fmt.Errorf(ErrorStringOnlyCodeAndReqId, reqID, resp.StatusCode)
 		}
 
-		return nil, &AlksError{
-			StatusCode: resp.StatusCode,
-			RequestId:  "",
-			Err:        fmt.Errorf(ErrorStringOnlyCode, resp.StatusCode),
-		}
+		return nil, fmt.Errorf(ErrorStringOnlyCode, resp.StatusCode)
 	}
 
 	lrr := new(LoginRoleResponse)
 	err = decodeBody(resp, &lrr)
 	if err != nil {
 		if reqID := GetRequestID(resp); reqID != "" {
-			return nil, &AlksError{
-				StatusCode: resp.StatusCode,
-				RequestId:  reqID,
-				Err:        fmt.Errorf("Error parsing LoginRole response: [%s] %s", reqID, err),
-			}
-
+			return nil, fmt.Errorf("Error parsing LoginRole response: [%s] %s", reqID, err)
 		}
 
-		return nil, &AlksError{
-			StatusCode: resp.StatusCode,
-			RequestId:  "",
-			Err:        fmt.Errorf("Error parsing LoginRole response: %s", err),
-		}
+		return nil, fmt.Errorf("Error parsing LoginRole response: %s", err)
 	}
 
 	if lrr.RequestFailed() {
-		return nil, &AlksError{
-			StatusCode: resp.StatusCode,
-			RequestId:  lrr.BaseResponse.RequestID,
-			Err:        fmt.Errorf("Error fetching role information: [%s] %s", lrr.BaseResponse.RequestID, strings.Join(lrr.GetErrors(), ", ")),
-		}
+		return nil, fmt.Errorf("Error fetching role information: [%s] %s", lrr.BaseResponse.RequestID, strings.Join(lrr.GetErrors(), ", "))
 	}
 
 	maxDuration := lrr.LoginRole.MaxKeyDuration
