@@ -57,7 +57,7 @@ func (c *Client) IsIamEnabled(roleArn string) (*IsIamEnabledResponse, error) {
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, &AlksError{
-			StatusCode: 0,
+			StatusCode: resp.StatusCode,
 			RequestId:  "",
 			Err:        err,
 		}
@@ -120,21 +120,21 @@ func (c *Client) IsIamEnabled(roleArn string) (*IsIamEnabledResponse, error) {
 	if err != nil {
 		if reqID := GetRequestID(resp); reqID != "" {
 			return nil, &AlksError{
-				StatusCode: 0,
+				StatusCode: resp.StatusCode,
 				RequestId:  reqID,
 				Err:        fmt.Errorf("error parsing isIamEnabled response: [%s] %s", reqID, err),
 			}
 		}
 
 		return nil, &AlksError{
-			StatusCode: 0,
+			StatusCode: resp.StatusCode,
 			RequestId:  "",
 			Err:        fmt.Errorf("error parsing isIamEnabled response: %s", err),
 		}
 	}
 	if validate.RequestFailed() {
 		return nil, &AlksError{
-			StatusCode: 0,
+			StatusCode: resp.StatusCode,
 			RequestId:  validate.BaseResponse.RequestID,
 			Err:        fmt.Errorf("error validating if IAM enabled: [%s] %s", validate.BaseResponse.RequestID, strings.Join(validate.GetErrors(), ", ")),
 		}

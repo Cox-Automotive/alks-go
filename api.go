@@ -198,7 +198,11 @@ func (c *Client) Durations() ([]int, error) {
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, &AlksError{
+			StatusCode: resp.StatusCode,
+			RequestId:  "",
+			Err:        err,
+		}
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -256,7 +260,7 @@ func (c *Client) Durations() ([]int, error) {
 	if err != nil {
 		if reqID := GetRequestID(resp); reqID != "" {
 			return nil, &AlksError{
-				StatusCode: 0,
+				StatusCode: resp.StatusCode,
 				RequestId:  reqID,
 				Err:        fmt.Errorf("Error parsing LoginRole response: [%s] %s", reqID, err),
 			}
@@ -264,7 +268,7 @@ func (c *Client) Durations() ([]int, error) {
 		}
 
 		return nil, &AlksError{
-			StatusCode: 0,
+			StatusCode: resp.StatusCode,
 			RequestId:  "",
 			Err:        fmt.Errorf("Error parsing LoginRole response: %s", err),
 		}
@@ -272,7 +276,7 @@ func (c *Client) Durations() ([]int, error) {
 
 	if lrr.RequestFailed() {
 		return nil, &AlksError{
-			StatusCode: 0,
+			StatusCode: resp.StatusCode,
 			RequestId:  lrr.BaseResponse.RequestID,
 			Err:        fmt.Errorf("Error fetching role information: [%s] %s", lrr.BaseResponse.RequestID, strings.Join(lrr.GetErrors(), ", ")),
 		}
