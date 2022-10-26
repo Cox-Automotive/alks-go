@@ -533,7 +533,7 @@ func (c *Client) UpdateIamUser(options *IamUserOptions) (*UpdateIamUserResponse,
 			return nil, &AlksError{
 				StatusCode: resp.StatusCode,
 				RequestId:  reqID,
-				Err:        fmt.Errorf(ErrorStringNoReqId, resp.StatusCode, strings.Join(updateErr.Errors, ", ")),
+				Err:        fmt.Errorf(AlksResponsErrorStrings, strings.Join(updateErr.Errors, ", ")),
 			}
 		}
 
