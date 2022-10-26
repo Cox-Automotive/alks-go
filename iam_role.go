@@ -246,7 +246,7 @@ func (c *Client) CreateIamRole(options *CreateIamRoleOptions) (*IamRoleResponse,
 		return nil, &AlksError{
 			StatusCode: resp.StatusCode,
 			RequestId:  reqID,
-			Err:        fmt.Errorf(ErrorStringOnlyCodeAndReqId, reqID, resp.StatusCode),
+			Err:        fmt.Errorf(GenericAlksError),
 		}
 	}
 
