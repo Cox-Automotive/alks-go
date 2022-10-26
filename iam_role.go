@@ -239,14 +239,14 @@ func (c *Client) CreateIamRole(options *CreateIamRoleOptions) (*IamRoleResponse,
 			return nil, &AlksError{
 				StatusCode: resp.StatusCode,
 				RequestId:  reqID,
-				Err:        fmt.Errorf(ErrorStringFull, reqID, resp.StatusCode, strings.Join(alksResponseErr.Errors, ", ")),
+				Err:        fmt.Errorf(AlksResponsErrorStrings, strings.Join(alksResponseErr.Errors, ", ")),
 			}
 		}
 
 		return nil, &AlksError{
 			StatusCode: resp.StatusCode,
 			RequestId:  reqID,
-			Err:        fmt.Errorf(ErrorStringOnlyCodeAndReqId, reqID, resp.StatusCode),
+			Err:        fmt.Errorf(GenericAlksError),
 		}
 	}
 
@@ -326,14 +326,14 @@ func (c *Client) CreateIamTrustRole(options *CreateIamRoleOptions) (*IamRoleResp
 			return nil, &AlksError{
 				StatusCode: resp.StatusCode,
 				RequestId:  reqID,
-				Err:        fmt.Errorf(ErrorStringFull, reqID, resp.StatusCode, strings.Join(trustErr.Errors, ", ")),
+				Err:        fmt.Errorf(AlksResponsErrorStrings, strings.Join(trustErr.Errors, ", ")),
 			}
 		}
 
 		return nil, &AlksError{
 			StatusCode: resp.StatusCode,
 			RequestId:  reqID,
-			Err:        fmt.Errorf(ErrorStringOnlyCodeAndReqId, reqID, resp.StatusCode),
+			Err:        fmt.Errorf(GenericAlksError),
 		}
 	}
 
