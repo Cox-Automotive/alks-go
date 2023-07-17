@@ -385,11 +385,11 @@ func (c *Client) UpdateIamRole(options *UpdateIamRoleRequest) (*UpdateIamRoleRes
 			Err:        err,
 		}
 	}
-	// accounts for a non empty tag object
+	// considering a non empty tag object
 	if options.Tags != nil {
 		log.Printf("[INFO] update IAM role %s with tags: %v", *options.RoleName, *options.Tags)
 	}
-	// accounts for a non empty TrustPolicy map
+	// considering a non empty TrustPolicy map
 	if options.TrustPolicy != nil {
 		log.Printf("[INFO] update IAM role %s with trust policy: %v", *options.RoleName, *options.TrustPolicy)
 	}
@@ -472,9 +472,6 @@ func (c *Client) UpdateIamRole(options *UpdateIamRoleRequest) (*UpdateIamRoleRes
 func (req *UpdateIamRoleRequest) updateIamRoleValidate() error {
 	if req.RoleName == nil {
 		return fmt.Errorf("roleName option must not be nil")
-	}
-	if req.Tags == nil && req.TrustPolicy == nil {
-		return fmt.Errorf("Either tags or trust policy must not be nil")
 	}
 	return nil
 }
