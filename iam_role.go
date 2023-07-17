@@ -376,7 +376,7 @@ type UpdateIamRoleResponse struct {
 	Tags            *[]Tag  `json:"tags"`
 }
 
-// Updates IAM role tags and/or trust policy
+// Updates an IAM role with the given options.
 func (c *Client) UpdateIamRole(options *UpdateIamRoleRequest) (*UpdateIamRoleResponse, *AlksError) {
 	if err := options.updateIamRoleValidate(); err != nil {
 		return nil, &AlksError{
