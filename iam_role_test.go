@@ -270,7 +270,7 @@ func (s *S) Test_GetIamRoleInternalError(c *C) {
 	c.Assert(err.StatusCode, Equals, 500)
 }
 
-func (s *S) Test_UpdateIamRole(c *C) {
+func (s *S) Test_UpdateIamRoleTags(c *C) {
 	testServer.Response(202, nil, updateRoleResponse)
 
 	roleName := "test-update-role"
@@ -291,7 +291,55 @@ func (s *S) Test_UpdateIamRole(c *C) {
 
 	c.Assert(err, IsNil)
 	c.Assert(resp, NotNil)
-	c.Assert(*resp.RoleName, Equals, "test-update-role")
+	c.Assert(*resp.RoleName, Equals, roleName)
+	c.Assert(*resp.Tags, NotNil)
+}
+
+func (s *S) Test_UpdateIamRoleTrustPolicy(c *C) {
+	testServer.Response(202, nil, updateRoleResponse)
+
+	roleName := "test-update-role"
+	trustPolicy := new(map[string]interface{})
+	json.Unmarshal(
+		[]byte(`{"Version":"2012-10-17","Statement":[{"Sid":"","Effect":"Allow","Principal":{"Service":"ecs-tasks.amazonaws.com"},"Action":"sts:AssumeRole"}]}`),
+		trustPolicy)
+	req := &UpdateIamRoleRequest{RoleName: &roleName, TrustPolicy: trustPolicy}
+	resp, err := s.client.UpdateIamRole(req)
+
+	_ = testServer.WaitRequest()
+
+	c.Assert(err, IsNil)
+	c.Assert(resp, NotNil)
+	c.Assert(*resp.RoleName, Equals, roleName)
+	c.Assert(*resp.Tags, NotNil)
+}
+
+func (s *S) Test_UpdateIamRoleTagsAndTrustPolicy(c *C) {
+	testServer.Response(202, nil, updateRoleResponse)
+
+	roleName := "test-update-role"
+	tags := []Tag{
+		{
+			Key:   "cai-owner",
+			Value: "123456",
+		},
+		{
+			Key:   "cai-person",
+			Value: "161803",
+		},
+	}
+	trustPolicy := new(map[string]interface{})
+	json.Unmarshal(
+		[]byte(`{"Version":"2012-10-17","Statement":[{"Sid":"","Effect":"Allow","Principal":{"Service":"ecs-tasks.amazonaws.com"},"Action":"sts:AssumeRole"}]}`),
+		trustPolicy)
+	req := &UpdateIamRoleRequest{RoleName: &roleName, Tags: &tags, TrustPolicy: trustPolicy}
+	resp, err := s.client.UpdateIamRole(req)
+
+	_ = testServer.WaitRequest()
+
+	c.Assert(err, IsNil)
+	c.Assert(resp, NotNil)
+	c.Assert(*resp.RoleName, Equals, roleName)
 	c.Assert(*resp.Tags, NotNil)
 }
 
