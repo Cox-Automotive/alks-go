@@ -3,7 +3,7 @@ package alks
 import (
 	"time"
 
-	. "github.com/motain/gocheck"
+	. "gopkg.in/check.v1"
 )
 
 func (s *S) Test_CreateSession(c *C) {

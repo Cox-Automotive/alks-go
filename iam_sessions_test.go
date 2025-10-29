@@ -4,7 +4,7 @@ import (
 	"github.com/Cox-Automotive/alks-go/testutils"
 	"testing"
 
-	. "github.com/motain/gocheck"
+	. "gopkg.in/check.v1"
 )
 
 func Test(t *testing.T) {
