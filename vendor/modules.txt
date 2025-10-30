@@ -1,8 +1,10 @@
 # github.com/hashicorp/go-cleanhttp v0.5.0
 ## explicit
 github.com/hashicorp/go-cleanhttp
-# github.com/motain/gocheck v0.0.0-20131023154940-9beb271d26e6
+# github.com/kr/pretty v0.2.1
+github.com/kr/pretty
+# github.com/kr/text v0.1.0
+github.com/kr/text
+# gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c
 ## explicit
-github.com/motain/gocheck
-# launchpad.net/gocheck v0.0.0-20140225173054-000000000087
-## explicit
+gopkg.in/check.v1

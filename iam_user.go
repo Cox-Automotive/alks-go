@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-//Represents iamUser returned by iam-user endpoint
+// Represents iamUser returned by iam-user endpoint
 type IamUser struct {
 	ARN       string `json:"arn"`
 	AccountId string `json:"accountId"`
@@ -67,7 +67,7 @@ type CreateIamUserResponse struct {
 	CreateIamUserApiResponse
 }
 
-//Used as options for create and update iamUser
+// Used as options for create and update iamUser
 type IamUserOptions struct {
 	IamUserName *string
 	Tags        *[]Tag
