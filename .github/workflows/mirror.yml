@@ -1,0 +1,24 @@
+name: Mirror to github.com
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - '**'
+
+jobs:
+  mirror:
+    runs-on: cai-standard-x86-linux
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Mirror master and tags to github.com
+        env:
+          GHCOM_TOKEN: ${{ secrets.GH_COM_TOKEN }}
+        run: |
+          git push "https://x-access-token:${GHCOM_TOKEN}@github.com/Cox-Automotive/alks-go.git" HEAD:refs/heads/master
+          git push "https://x-access-token:${GHCOM_TOKEN}@github.com/Cox-Automotive/alks-go.git" --tags
