@@ -16,7 +16,7 @@ Phase 0 of the plan. Each entry: decision, rationale, alternatives. Evidence was
 **Alternatives considered**:
 - **goja**, current head (`dop251/goja`, 2026-11-05): its `go.mod` requires **Go 1.26**, newer than the provider's 1.25. Rejected.
 - **goja at `447a94be`** (2026-10-10, the last revision on `go 1.25.0`): workable, and faster than otto. But it forces every consumer onto Go 1.25, pins an untagged revision that will soon be stale, and pulls more dependencies (regexp2, sourcemap, semver, go-yaml, pprof). Kept as the fallback if otto proves too slow.
-- **`darren/gpac`**: used in the macOS proof of concept and correct, but last published 2021 and pins a 2021 goja. Its PAC helper functions are MIT-licensed (Copyright (c) 2019 Darren Hoo) and are **ported** into `internal/pac` with attribution, not imported.
+- **`darren/gpac`**: used in the macOS proof of concept and correct, but last published 2021 and pins a 2021 goja. *Corrected during implementation (2026-11-06):* gpac's JavaScript helper library is extracted from Mozilla's `ProxyAutoConfig.cpp` (MPL 2.0), not gpac's own MIT code, so it was **not** ported. The PAC helper functions in `internal/pac/helpers.go` are original Go implementations of the Netscape PAC functions.
 - **`saucelabs/forwarder/pac`**: maintained and goja-based, but pulls in the whole forwarder module (57 requirements). Rejected under Constitution VI.
 - **`mattn/go-ieproxy` on macOS**: its macOS code requires cgo, and with `CGO_ENABLED=0` it silently returns an empty configuration. Rejected (Constitution II).
 

@@ -7,11 +7,8 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"strings"
-
-	cleanhttp "github.com/hashicorp/go-cleanhttp"
 )
 
 // Client represents an ALKS client and contains the account info and base url.
@@ -40,33 +37,49 @@ type LoginRole struct {
 
 // NewClient will create a new instance of the ALKS Client. If you don't yet know the account/role
 // pass them as nil and then invoke GetAccounts().
-func NewClient(url string, username string, password string, account string, role string) (*Client, error) {
+//
+// Options (see ClientOption) configure the proxy, the User-Agent and the HTTP client.
+func NewClient(url string, username string, password string, account string, role string, opts ...ClientOption) (*Client, error) {
+	cfg, err := buildConfig(opts)
+	if err != nil {
+		return nil, err
+	}
 	creds := Basic{Username: username, Password: password}
 
 	client := Client{
 		Credentials:    &creds,
 		AccountDetails: AccountDetails{Account: account, Role: role},
 		BaseURL:        url,
-		http:           cleanhttp.DefaultClient(),
-		userAgent:      "alks-go",
+		http:           newHTTPClient(cfg),
+		userAgent:      cfg.userAgent,
 	}
 
 	return &client, nil
 }
 
 // NewSTSClient will create a new instance of the ALKS Client using STS tokens.
-func NewSTSClient(url string, accessKey string, secretKey string, token string) (*Client, error) {
+//
+// The constructor makes one request (GET /loginRoles/id/me) to learn the account
+// and role. Options, including WithUserAgent and the proxy options, already apply
+// to that request.
+func NewSTSClient(url string, accessKey string, secretKey string, token string, opts ...ClientOption) (*Client, error) {
+	cfg, err := buildConfig(opts)
+	if err != nil {
+		return nil, err
+	}
 	creds := STS{AccessKey: accessKey, SecretKey: secretKey, SessionToken: token}
 	client := Client{
 		Credentials: &creds,
 		BaseURL:     url,
-		http:        cleanhttp.DefaultClient(),
-		userAgent:   "alks-go",
+		http:        newHTTPClient(cfg),
+		userAgent:   cfg.userAgent,
 	}
 
 	// Fetch the current login role, and try to populate the account details object.  If we fail, just ignore
-	loginRole, err := client.GetMyLoginRole()
-	if err == nil {
+	// GetMyLoginRole returns a *AlksError; keep it out of the error variable above,
+	// or a nil *AlksError would become a non-nil error interface.
+	loginRole, lrErr := client.GetMyLoginRole()
+	if lrErr == nil {
 		client.AccountDetails.Account = loginRole.LoginRole.Account
 		client.AccountDetails.Role = loginRole.LoginRole.Role
 	}
@@ -75,15 +88,21 @@ func NewSTSClient(url string, accessKey string, secretKey string, token string) 
 }
 
 // NewBearerTokenClient will create a new instance of the ALKS Client using Okta Bearer Token auth.
-func NewBearerTokenClient(url string, bearerToken string, account string, role string) (*Client, error) {
+//
+// Options (see ClientOption) configure the proxy, the User-Agent and the HTTP client.
+func NewBearerTokenClient(url string, bearerToken string, account string, role string, opts ...ClientOption) (*Client, error) {
+	cfg, err := buildConfig(opts)
+	if err != nil {
+		return nil, err
+	}
 	creds := Bearer{Token: bearerToken}
 
 	client := Client{
 		Credentials:    &creds,
 		AccountDetails: AccountDetails{Account: account, Role: role},
 		BaseURL:        url,
-		http:           cleanhttp.DefaultClient(),
-		userAgent:      "alks-go",
+		http:           newHTTPClient(cfg),
+		userAgent:      cfg.userAgent,
 	}
 
 	return &client, nil
@@ -130,26 +149,16 @@ func (c *Client) NewRequest(json []byte, method string, endpoint string) (*http.
 		return nil, fmt.Errorf("Error adding configuring authentication: %s", err)
 	}
 
-	log.Println("------- ALKS HTTP Request -------")
-	requestDump, err := httputil.DumpRequest(req, true)
-	if err != nil {
-		log.Println(err)
-	}
-	log.Println(string(requestDump))
-	log.Println("-------- !!!!!!!!!! ---------")
+	// Never log headers or bodies: they carry credentials (Constitution IV).
+	debugf("request %s %s", method, u.Path)
 
 	return req, nil
 }
 
 // decodeBody will convert a http.Response object to a JSON object.
 func decodeBody(resp *http.Response, out interface{}) error {
-	log.Println("------- ALKS HTTP Response -------")
-	responseDump, err := httputil.DumpResponse(resp, true)
-	if err != nil {
-		log.Println(err)
-	}
-	log.Println(string(responseDump))
-	log.Println("-------- !!!!!!!!!! ---------")
+	// Never log bodies: session responses carry credentials (Constitution IV).
+	debugf("response HTTP %d", resp.StatusCode)
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {

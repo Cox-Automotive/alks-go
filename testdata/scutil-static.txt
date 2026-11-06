@@ -1,0 +1,15 @@
+<dictionary> {
+  ExceptionsList : <array> {
+    0 : *.internal.example.com
+    1 : localhost
+  }
+  ExcludeSimpleHostnames : 0
+  HTTPEnable : 1
+  HTTPPort : 3128
+  HTTPProxy : proxy.example.com
+  HTTPSEnable : 1
+  HTTPSPort : 8443
+  HTTPSProxy : secure-proxy.example.com
+  ProxyAutoConfigEnable : 0
+  SOCKSEnable : 0
+}

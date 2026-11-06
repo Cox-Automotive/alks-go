@@ -1,0 +1,84 @@
+name: alks-go Release
+
+# Tags a release when a PR labelled release/patch, release/minor or release/major is
+# merged to master (constitution Principle VII). release/skip, or no release label,
+# releases nothing. The tag is pushed to GHE and to the github.com mirror, where Go
+# consumers resolve the module. The mirror workflow does not run for a tag pushed
+# with the built-in token, so this job pushes it to github.com itself.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [master]
+
+jobs:
+  release:
+    if: ${{ github.event.pull_request.merged == true }}
+    runs-on: cai-standard-x86-linux
+    permissions:
+      contents: write
+    steps:
+      - name: Read the release level from the PR labels
+        id: level
+        env:
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          level=""
+          for l in major minor patch; do
+            if echo ",${LABELS}," | grep -q ",release/${l},"; then level="$l"; break; fi
+          done
+          echo "level=${level}" >> "$GITHUB_OUTPUT"
+          if [ -z "$level" ]; then echo "No release/patch|minor|major label: nothing to release."; fi
+
+      - name: Check out the PR's merge commit
+        if: ${{ steps.level.outputs.level != '' }}
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 0
+
+      - name: Refuse to release a commit twice
+        if: ${{ steps.level.outputs.level != '' }}
+        run: |
+          if git tag --points-at HEAD | grep -q '^v[0-9]'; then
+            echo "::error::This commit is already released as $(git tag --points-at HEAD | tr '\n' ' ')"
+            exit 1
+          fi
+
+      - name: Work out the next version
+        if: ${{ steps.level.outputs.level != '' }}
+        id: version
+        env:
+          LEVEL: ${{ steps.level.outputs.level }}
+        run: |
+          latest="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n 1)"
+          if [ -z "$latest" ]; then
+            echo "::error::No v* tag exists yet. Tag the baseline v1.0.0 by hand first."
+            exit 1
+          fi
+          IFS=. read -r major minor patch <<< "${latest#v}"
+          case "$LEVEL" in
+            major) major=$((major + 1)); minor=0; patch=0 ;;
+            minor) minor=$((minor + 1)); patch=0 ;;
+            patch) patch=$((patch + 1)) ;;
+          esac
+          tag="v${major}.${minor}.${patch}"
+          echo "Releasing ${tag} (previous ${latest}, level ${LEVEL})"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          if ! grep -q "^## ${tag#v}" CHANGELOG.md; then
+            echo "::warning::CHANGELOG.md has no '## ${tag#v}' entry"
+          fi
+
+      - name: Tag and push to GHE and github.com
+        if: ${{ steps.level.outputs.level != '' }}
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          GHCOM_TOKEN: ${{ secrets.GH_COM_TOKEN }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git tag -a "$TAG" -m "${TAG}: PR #${PR_NUMBER} ${PR_TITLE}"
+          git push origin "$TAG"
+          git push "https://x-access-token:${GHCOM_TOKEN}@github.com/Cox-Automotive/alks-go.git" "$TAG"

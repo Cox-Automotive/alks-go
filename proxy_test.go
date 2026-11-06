@@ -1,0 +1,183 @@
+package alks
+
+import (
+	"errors"
+	"net/url"
+	"testing"
+
+	"golang.org/x/net/http/httpproxy"
+)
+
+// fakeOS is an osProxySource for tests: no real OS settings are read.
+type fakeOS struct {
+	cfg       osProxyConfig
+	cfgErr    error
+	pacAnswer map[string]string // host -> "host:port" or "" (direct)
+	pacErr    error
+	pacCalls  int
+	cfgCalls  int
+}
+
+func (f *fakeOS) config() (osProxyConfig, error) { f.cfgCalls++; return f.cfg, f.cfgErr }
+
+func (f *fakeOS) pacProxyFor(_ osProxyConfig, u *url.URL) (string, error) {
+	f.pacCalls++
+	if f.pacErr != nil {
+		return "", f.pacErr
+	}
+	return f.pacAnswer[u.Hostname()], nil
+}
+
+const alksURL = "https://alks.coxautoinc.com/rest/loginRoles/id/me"
+
+func decideFor(t *testing.T, env httpproxy.Config, os *fakeOS, raw string) proxyDecision {
+	t.Helper()
+	u, _ := url.Parse(raw)
+	return newProxySelector(&env, os).decide(u)
+}
+
+func proxyHost(d proxyDecision) string {
+	if d.proxy == nil {
+		return "direct"
+	}
+	return d.proxy.Host
+}
+
+func zscalerPAC() *fakeOS {
+	return &fakeOS{
+		cfg:       osProxyConfig{pacURL: "http://127.0.0.1:9000/x.pac"},
+		pacAnswer: map[string]string{"alks.coxautoinc.com": "127.0.0.1:9000", "login.microsoftonline.com": ""},
+	}
+}
+
+// US1: the OS proxy is followed.
+func TestAutoUsesPAC(t *testing.T) {
+	d := decideFor(t, httpproxy.Config{}, zscalerPAC(), alksURL)
+	if proxyHost(d) != "127.0.0.1:9000" || d.source != sourcePAC {
+		t.Fatalf("got %s / %s", proxyHost(d), d.source)
+	}
+}
+
+func TestAutoPACPerHost(t *testing.T) {
+	os := zscalerPAC()
+	if d := decideFor(t, httpproxy.Config{}, os, "https://login.microsoftonline.com/x"); d.proxy != nil {
+		t.Fatalf("PAC DIRECT host was proxied via %s", proxyHost(d))
+	}
+}
+
+func TestAutoStaticProxyAndExceptions(t *testing.T) {
+	os := &fakeOS{cfg: osProxyConfig{staticHTTPS: "proxy.example.com:8443", exceptions: []string{"*.internal.example.com"}}}
+	if d := decideFor(t, httpproxy.Config{}, os, alksURL); proxyHost(d) != "proxy.example.com:8443" || d.source != sourceOSStatic {
+		t.Fatalf("static proxy not used: %s / %s", proxyHost(d), d.source)
+	}
+	if d := decideFor(t, httpproxy.Config{}, os, "https://a.internal.example.com/"); d.proxy != nil {
+		t.Fatal("exception host was proxied")
+	}
+	simple := &fakeOS{cfg: osProxyConfig{staticHTTPS: "proxy.example.com:8443", excludeSimpleHostnames: true}}
+	if d := decideFor(t, httpproxy.Config{}, simple, "https://intranet/"); d.proxy != nil {
+		t.Fatal("simple hostname was proxied")
+	}
+}
+
+func TestAutoPACWinsOverStatic(t *testing.T) {
+	os := zscalerPAC()
+	os.cfg.staticHTTPS = "static.example.com:1"
+	if d := decideFor(t, httpproxy.Config{}, os, "https://login.microsoftonline.com/"); d.proxy != nil {
+		t.Fatal("PAC DIRECT was overridden by the static proxy")
+	}
+}
+
+func TestAutoNothingConfiguredIsDirect(t *testing.T) {
+	if d := decideFor(t, httpproxy.Config{}, &fakeOS{}, alksURL); d.proxy != nil || d.source != sourceDirect {
+		t.Fatalf("got %s / %s", proxyHost(d), d.source)
+	}
+}
+
+// US2: existing behaviour and explicit settings still win.
+func TestEnvironmentWinsOverOS(t *testing.T) {
+	d := decideFor(t, httpproxy.Config{HTTPSProxy: "http://env-proxy:3128"}, zscalerPAC(), alksURL)
+	if proxyHost(d) != "env-proxy:3128" || d.source != sourceEnv {
+		t.Fatalf("got %s / %s", proxyHost(d), d.source)
+	}
+}
+
+func TestNoProxyExemptsOSProxy(t *testing.T) {
+	for _, np := range []string{"alks.coxautoinc.com", "coxautoinc.com", ".coxautoinc.com", "*"} {
+		os := zscalerPAC()
+		d := decideFor(t, httpproxy.Config{NoProxy: np}, os, alksURL)
+		if d.proxy != nil {
+			t.Errorf("NO_PROXY=%q: still proxied via %s", np, proxyHost(d))
+		}
+		if os.pacCalls != 0 {
+			t.Errorf("NO_PROXY=%q: PAC was evaluated", np)
+		}
+	}
+	if d := decideFor(t, httpproxy.Config{NoProxy: ".other.com"}, zscalerPAC(), alksURL); d.proxy == nil {
+		t.Error("unrelated NO_PROXY entry exempted the ALKS host")
+	}
+	if d := decideFor(t, httpproxy.Config{NoProxy: "10.0.0.0/8"}, zscalerPAC(), "https://10.1.2.3/"); d.proxy != nil {
+		t.Error("CIDR NO_PROXY entry not honoured")
+	}
+}
+
+func TestLoopbackNeverProxied(t *testing.T) {
+	os := &fakeOS{cfg: osProxyConfig{staticHTTPS: "proxy.example.com:8443"}}
+	for _, raw := range []string{"http://localhost:4200/x", "http://127.0.0.1:8080/", "http://[::1]:1/"} {
+		if d := decideFor(t, httpproxy.Config{}, os, raw); d.proxy != nil {
+			t.Errorf("%s was proxied", raw)
+		}
+	}
+	if os.cfgCalls != 0 {
+		t.Error("the OS settings were read for a loopback request")
+	}
+}
+
+func TestDiscoveryFailuresFallBack(t *testing.T) {
+	cfgFail := &fakeOS{cfgErr: errors.New("scutil failed")}
+	if d := decideFor(t, httpproxy.Config{}, cfgFail, alksURL); d.proxy != nil || d.fallback == "" {
+		t.Fatalf("config failure: %s / fallback %q", proxyHost(d), d.fallback)
+	}
+	pacFail := zscalerPAC()
+	pacFail.pacErr = errors.New("PAC server down")
+	if d := decideFor(t, httpproxy.Config{}, pacFail, alksURL); d.proxy != nil || d.fallback == "" {
+		t.Fatalf("PAC failure: %s / fallback %q", proxyHost(d), d.fallback)
+	}
+	// The environment still applies when OS discovery would fail.
+	if d := decideFor(t, httpproxy.Config{HTTPSProxy: "http://env:1"}, cfgFail, alksURL); proxyHost(d) != "env:1" {
+		t.Fatalf("env not used: %s", proxyHost(d))
+	}
+}
+
+func TestDecisionsAreCached(t *testing.T) {
+	os := zscalerPAC()
+	s := newProxySelector(&httpproxy.Config{}, os)
+	u, _ := url.Parse(alksURL)
+	for i := 0; i < 1000; i++ {
+		s.decide(u)
+	}
+	if os.pacCalls != 1 || os.cfgCalls != 1 {
+		t.Fatalf("PAC evaluated %d times, config read %d times; want 1 and 1", os.pacCalls, os.cfgCalls)
+	}
+}
+
+func TestModesOtherThanAuto(t *testing.T) {
+	restore := newOSProxySource
+	defer func() { newOSProxySource = restore }()
+	called := false
+	newOSProxySource = func() osProxySource { called = true; return zscalerPAC() }
+
+	for _, opts := range [][]ClientOption{
+		{WithProxyMode(ProxyEnvironment)},
+		{WithProxyMode(ProxyNone)},
+		{WithProxyURL("http://127.0.0.1:9000")},
+	} {
+		cfg, err := buildConfig(opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		newHTTPClient(cfg)
+	}
+	if called {
+		t.Fatal("OS discovery was set up outside auto mode")
+	}
+}

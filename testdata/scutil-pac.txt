@@ -1,0 +1,14 @@
+<dictionary> {
+  ExceptionsList : <array> {
+    0 : *.local
+    1 : 169.254/16
+  }
+  ExcludeSimpleHostnames : 1
+  FTPPassive : 1
+  HTTPEnable : 0
+  HTTPSEnable : 0
+  ProxyAutoConfigEnable : 1
+  ProxyAutoConfigURLString : http://127.0.0.1:9000/systemproxy-test.pac
+  ProxyAutoDiscoveryEnable : 0
+  SOCKSEnable : 0
+}

@@ -1,0 +1,22 @@
+name: Check For Release Label
+
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+jobs:
+  check_for_release_label:
+    runs-on: cai-standard-x86-linux
+    steps:
+      - name: Check for a release label
+        env:
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          echo "Labels: ${LABELS}"
+          if echo ",${LABELS}," | grep -qE ',release/(skip|patch|minor|major),'; then
+            echo "Release label found"
+          else
+            echo "::error::Label this PR release/patch, release/minor, release/major or release/skip"
+            exit 1
+          fi

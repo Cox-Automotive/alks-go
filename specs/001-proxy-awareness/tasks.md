@@ -24,10 +24,10 @@ description: "Task list for system-proxy awareness in alks-go"
 **Purpose**: versioning baseline, dependencies, labels
 
 - [ ] T001 **(manual, Dave)** Tag the current `master` (`a8e45b1`) as annotated `v1.0.0` on GHE and push the tag; confirm `mirror.yml` copies it to github.com and that `https://proxy.golang.org/github.com/!cox-!automotive/alks-go/@v/v1.0.0.info` resolves (FR-020)
-- [ ] T002 Create the labels `release/patch`, `release/minor`, `release/major`, `release/skip` on `ETS-CloudAutomation/alks-go` (FR-021, FR-022)
-- [ ] T003 Raise the `go` directive in `go.mod` from `1.16` to `1.22` (research R-12)
-- [ ] T004 Add `github.com/robertkrimen/otto v0.5.1`, `github.com/mattn/go-ieproxy v0.0.12` and `golang.org/x/net` (for `http/httpproxy`) to `go.mod`; run `go mod tidy` and `go mod vendor`; commit `vendor/` (research R-1, R-3, R-7; Constitution VI)
-- [ ] T005 [P] Create `testdata/` with fixtures: `scutil-pac.txt` (PAC enabled, loopback URL), `scutil-static.txt` (static HTTPS proxy with `ExceptionsList`), `scutil-none.txt`, `pac-zscaler-like.js` (ALKS host to `PROXY`, `login.microsoftonline.com` to `DIRECT`, a `PROXY a; DIRECT` list, a `dnsDomainIs` and an `isInNet` rule), `pac-broken.js`, `pac-slow.js` (a busy loop)
+- [x] T002 Create the labels `release/patch`, `release/minor`, `release/major`, `release/skip` on `ETS-CloudAutomation/alks-go` (FR-021, FR-022)
+- [x] T003 Raise the `go` directive in `go.mod` from `1.16` to `1.22` (research R-12)
+- [x] T004 Add `github.com/robertkrimen/otto v0.5.1`, `github.com/mattn/go-ieproxy v0.0.12` and `golang.org/x/net` (for `http/httpproxy`) to `go.mod`; run `go mod tidy` and `go mod vendor`; commit `vendor/` (research R-1, R-3, R-7; Constitution VI)
+- [x] T005 [P] Create `testdata/` with fixtures: `scutil-pac.txt` (PAC enabled, loopback URL), `scutil-static.txt` (static HTTPS proxy with `ExceptionsList`), `scutil-none.txt`, `pac-zscaler-like.js` (ALKS host to `PROXY`, `login.microsoftonline.com` to `DIRECT`, a `PROXY a; DIRECT` list, a `dnsDomainIs` and an `isInNet` rule), `pac-broken.js`, `pac-slow.js` (a busy loop)
 
 ---
 
@@ -35,20 +35,20 @@ description: "Task list for system-proxy awareness in alks-go"
 
 **Purpose**: the options type, the OS-source seam, and the PAC evaluator everything else uses
 
-- [ ] T006 Create `options.go`:
+- [x] T006 Create `options.go`:
   - `ProxyMode` (`ProxyAuto`, `ProxyEnvironment`, `ProxyNone`) with `String()`;
   - `ClientOption` and the unexported `clientConfig`;
   - `WithProxyMode`, `WithProxyURL`, `WithUserAgent`, `WithHTTPClient`;
   - validation: an unknown mode, a malformed or non-http(s) proxy URL, and `WithProxyURL` with `ProxyNone` are all errors (contracts/public-api.md, data-model.md; FR-010, FR-011, FR-012)
-- [ ] T007 [P] Create `osproxy.go`: the `osProxySource` interface (`config()`, `pacProxyFor(*url.URL)`), the `OSProxyConfig` type, and a package-level factory that tests can replace (data-model.md)
-- [ ] T008 [P] Create `osproxy_other.go` (`//go:build !darwin && !windows`): a source that reports nothing configured (FR-009, research R-4)
-- [ ] T009 [P] Create `internal/pac/helpers.go`: the standard PAC functions (`isPlainHostName`, `dnsDomainIs`, `localHostOrDomainIs`, `isResolvable`, `isInNet`, `dnsResolve`, `myIpAddress`, `dnsDomainLevels`, `shExpMatch`, `weekdayRange`, `dateRange`, `timeRange`), ported from `darren/gpac` with the MIT notice and copyright retained in a file header (research R-1)
-- [ ] T010 Create `internal/pac/pac.go`, which depends on T009:
+- [x] T007 [P] Create `osproxy.go`: the `osProxySource` interface (`config()`, `pacProxyFor(*url.URL)`), the `OSProxyConfig` type, and a package-level factory that tests can replace (data-model.md)
+- [x] T008 [P] Create `osproxy_other.go` (`//go:build !darwin && !windows`): a source that reports nothing configured (FR-009, research R-4)
+- [x] T009 [P] Create `internal/pac/helpers.go`: the standard PAC functions (`isPlainHostName`, `dnsDomainIs`, `localHostOrDomainIs`, `isResolvable`, `isInNet`, `dnsResolve`, `myIpAddress`, `dnsDomainLevels`, `shExpMatch`, `weekdayRange`, `dateRange`, `timeRange`), written as original Go implementations (gpac's helpers turned out to be Mozilla MPL-2.0 code, so they were not ported; research R-1)
+- [x] T010 Create `internal/pac/pac.go`, which depends on T009:
   - `Evaluate(script, url string, budget time.Duration) (string, error)` on otto, enforcing the budget through otto's interrupt channel;
   - `FirstEntry(answer string)`, which parses `PROXY h:p`, `DIRECT`, and lists separated by `;`, and treats empty, malformed, `SOCKS` and `HTTPS` answers as `DIRECT` (FR-003, research R-6)
-- [ ] T011 [P] Create `logging.go`: `redactURL` (strips userinfo) and a `debugf` helper on the standard `log` package (FR-018, FR-019, research R-9)
-- [ ] T012 [P] Tests `internal/pac/pac_test.go`: each helper; every `testdata/pac-*.js` fixture; first-entry parsing including `PROXY a:9000; DIRECT`; the budget firing on `pac-slow.js`; `pac-broken.js` returning an error
-- [ ] T013 [P] Tests `options_test.go`: defaults (`ProxyAuto`, User-Agent `alks-go`), each option, every validation error (FR-010 to FR-013)
+- [x] T011 [P] Create `logging.go`: `redactURL` (strips userinfo) and a `debugf` helper on the standard `log` package (FR-018, FR-019, research R-9)
+- [x] T012 [P] Tests `internal/pac/pac_test.go`: each helper; every `testdata/pac-*.js` fixture; first-entry parsing including `PROXY a:9000; DIRECT`; the budget firing on `pac-slow.js`; `pac-broken.js` returning an error
+- [x] T013 [P] Tests `options_test.go`: defaults (`ProxyAuto`, User-Agent `alks-go`), each option, every validation error (FR-010 to FR-013)
 
 **Checkpoint**: options, OS seam and PAC evaluator exist and are tested; nothing is wired into the client yet.
 
@@ -62,8 +62,8 @@ description: "Task list for system-proxy awareness in alks-go"
 
 ### Tests (write first, see them fail)
 
-- [ ] T014 [P] [US1] `scutil_parse_test.go`: parse each `testdata/scutil-*.txt` into the expected `OSProxyConfig` (runs on all platforms)
-- [ ] T015 [P] [US1] `proxy_test.go`, auto-mode OS cases:
+- [x] T014 [P] [US1] `scutil_parse_test.go`: parse each `testdata/scutil-*.txt` into the expected `OSProxyConfig` (runs on all platforms)
+- [x] T015 [P] [US1] `proxy_test.go`, auto-mode OS cases:
   - a PAC `PROXY` answer is used;
   - a PAC `DIRECT` answer goes direct;
   - per-host PAC rules are honoured;
@@ -73,25 +73,25 @@ description: "Task list for system-proxy awareness in alks-go"
   - the decision source is recorded as `pac` or `os-static`.
 
   Covers FR-001, FR-002, FR-009.
-- [ ] T016 [P] [US1] `proxy_integration_test.go`: an `httptest` PAC server plus a recording `CONNECT` proxy on `127.0.0.1` and a fake OS source. Covers quickstart table rows 1, 3 and 7: proxied; an unreachable first entry fails with an error naming the proxy and no direct attempt (FR-003); 1,000 requests to one host evaluate the PAC once (SC-007)
+- [x] T016 [P] [US1] `proxy_integration_test.go`: an `httptest` PAC server plus a recording `CONNECT` proxy on `127.0.0.1` and a fake OS source. Covers quickstart table rows 1, 3 and 7: proxied; an unreachable first entry fails with an error naming the proxy and no direct attempt (FR-003); 1,000 requests to one host evaluate the PAC once (SC-007)
 
 ### Implementation
 
-- [ ] T017 [US1] Create `scutil_parse.go` (untagged): parse `scutil --proxy` dictionary output into `OSProxyConfig` (research R-2)
-- [ ] T018 [US1] Create `osproxy_darwin.go`:
+- [x] T017 [US1] Create `scutil_parse.go` (untagged): parse `scutil --proxy` dictionary output into `OSProxyConfig` (research R-2)
+- [x] T018 [US1] Create `osproxy_darwin.go`:
   - run `/usr/sbin/scutil --proxy` with a 5 s timeout and parse it with T017;
   - fetch the PAC URL with **no proxy** and a 5 s timeout, and cache the script;
   - `pacProxyFor` evaluates with `internal/pac` under a 2 s budget and returns the first entry.
 
   Research R-2, R-6.
-- [ ] T019 [P] [US1] Create `osproxy_windows.go`: `ieproxy.GetConf()` mapped to `OSProxyConfig` (PAC URL, auto-detect, static `https` proxy, bypass list); `pacProxyFor` uses `conf.Automatic.FindProxyForURL`, where empty means `DIRECT` (research R-3)
-- [ ] T020 [US1] Create `proxy.go`, which depends on T006, T007, T010 and T011:
+- [x] T019 [P] [US1] Create `osproxy_windows.go`: `ieproxy.GetConf()` mapped to `OSProxyConfig` (PAC URL, auto-detect, static `https` proxy, bypass list); `pacProxyFor` uses `conf.Automatic.FindProxyForURL`, where empty means `DIRECT` (research R-3)
+- [x] T020 [US1] Create `proxy.go`, which depends on T006, T007, T010 and T011:
   - the selection function implementing data-model.md "Selection rules";
   - the per-client decision cache, keyed by scheme+host+port and mutex-protected;
   - the transport is `cleanhttp.DefaultTransport()` with `Proxy` set to the selection function.
 
   FR-001 to FR-003, research R-5, R-10.
-- [ ] T021 [US1] Wire the transport into the client in `api.go`: replace `cleanhttp.DefaultClient()` in all three constructors with a client built from `clientConfig` (depends on T020)
+- [x] T021 [US1] Wire the transport into the client in `api.go`: replace `cleanhttp.DefaultClient()` in all three constructors with a client built from `clientConfig` (depends on T020)
 
 **Checkpoint**: US1 tests pass; a default client follows the OS PAC or static proxy.
 
@@ -105,7 +105,7 @@ description: "Task list for system-proxy awareness in alks-go"
 
 ### Tests (write first)
 
-- [ ] T022 [P] [US2] `proxy_test.go`, matrix cases:
+- [x] T022 [P] [US2] `proxy_test.go`, matrix cases:
   - `HTTPS_PROXY` set beats the OS proxy (`source=env`);
   - lowercase `https_proxy` is honoured;
   - `NO_PROXY` matching the ALKS host skips the OS PAC;
@@ -116,26 +116,26 @@ description: "Task list for system-proxy awareness in alks-go"
   - an explicit URL is used and `NO_PROXY` is not applied.
 
   Covers FR-004, FR-005, FR-010, FR-011.
-- [ ] T023 [P] [US2] `proxy_test.go`, failure cases:
+- [x] T023 [P] [US2] `proxy_test.go`, failure cases:
   - an OS config error falls back to the environment, then direct, without an error;
   - a PAC fetch failure falls back;
   - a PAC evaluation timeout or error falls back;
   - each fallback is recorded in the decision.
 
   Covers FR-006.
-- [ ] T024 [P] [US2] `proxy_integration_test.go`: quickstart rows 2, 4 and 5 (`NO_PROXY` exemption, PAC server down falls back to direct, `ProxyEnvironment` ignores the PAC)
-- [ ] T025 [P] [US2] A test, run on every platform with the real (non-fake) source for that OS where the platform is linux or freebsd, confirming no proxy is reported and the behaviour equals `http.ProxyFromEnvironment` (FR-009, problem spec R13)
+- [x] T024 [P] [US2] `proxy_integration_test.go`: quickstart rows 2, 4 and 5 (`NO_PROXY` exemption, PAC server down falls back to direct, `ProxyEnvironment` ignores the PAC)
+- [x] T025 [P] [US2] A test, run on every platform with the real (non-fake) source for that OS where the platform is linux or freebsd, confirming no proxy is reported and the behaviour equals `http.ProxyFromEnvironment` (FR-009, problem spec R13)
 
 ### Implementation
 
-- [ ] T026 [US2] In `proxy.go`:
+- [x] T026 [US2] In `proxy.go`:
   - environment step through `httpproxy.FromEnvironment().ProxyFunc()`;
   - a `NO_PROXY` check against OS-discovered proxies through an `httpproxy.Config` built from the chosen proxy plus `NO_PROXY`;
   - the `ProxyEnvironment` (`http.ProxyFromEnvironment`) and `ProxyNone` (nil proxy) paths;
   - an explicit URL bypasses `NO_PROXY`.
 
   Research R-7.
-- [ ] T027 [US2] In `proxy.go`: discovery-failure handling. On any OS or PAC error, skip the OS steps, decide direct, and record `fallback` (FR-006, research R-6)
+- [x] T027 [US2] In `proxy.go`: discovery-failure handling. On any OS or PAC error, skip the OS steps, decide direct, and record `fallback` (FR-006, research R-6)
 
 **Checkpoint**: US1 and US2 pass together; existing behaviour is preserved.
 
@@ -149,20 +149,20 @@ description: "Task list for system-proxy awareness in alks-go"
 
 ### Tests (write first)
 
-- [ ] T028 [P] [US3] `api_test.go`: the existing test calls compile unchanged against the new signatures (SC-002). Add an `httptest` server that records the User-Agent of `GET /rest/loginRoles/id/me` made by `NewSTSClient(..., WithUserAgent("x"))`; expect `x`. Without the option, expect `alks-go` (FR-014)
-- [ ] T029 [P] [US3] `api_test.go`: `WithHTTPClient` is used as is, with its transport's `Proxy` untouched; `SetUserAgent` still affects later requests (FR-015)
-- [ ] T030 [P] [US3] `api_test.go`: constructor validation errors surface from each constructor (FR-011)
+- [x] T028 [P] [US3] `api_test.go`: the existing test calls compile unchanged against the new signatures (SC-002). Add an `httptest` server that records the User-Agent of `GET /rest/loginRoles/id/me` made by `NewSTSClient(..., WithUserAgent("x"))`; expect `x`. Without the option, expect `alks-go` (FR-014)
+- [x] T029 [P] [US3] `api_test.go`: `WithHTTPClient` is used as is, with its transport's `Proxy` untouched; `SetUserAgent` still affects later requests (FR-015)
+- [x] T030 [P] [US3] `api_test.go`: constructor validation errors surface from each constructor (FR-011)
 
 ### Implementation
 
-- [ ] T031 [US3] `api.go`:
+- [x] T031 [US3] `api.go`:
   - add `opts ...ClientOption` to `NewClient`, `NewSTSClient` and `NewBearerTokenClient`;
   - build `clientConfig` and apply the User-Agent and transport **before** `NewSTSClient` calls `GetMyLoginRole`;
   - return validation errors;
   - keep ignoring a failed login-role lookup, as today.
 
   FR-012, FR-014, FR-017.
-- [ ] T032 [US3] Search the known consumers (`ETS-CloudAutomation/terraform-provider-alks`, `MAN-VehicleInformationRTC/actions-mapper`) for constructors held in function-typed variables, which the variadic change would break (research R-8); record the result in `CHANGELOG.md`
+- [x] T032 [US3] Search the known consumers (`ETS-CloudAutomation/terraform-provider-alks`, `MAN-VehicleInformationRTC/actions-mapper`) for constructors held in function-typed variables, which the variadic change would break (research R-8); record the result in `CHANGELOG.md`
 
 **Checkpoint**: US1–US3 pass; the API is backward compatible.
 
@@ -176,13 +176,13 @@ description: "Task list for system-proxy awareness in alks-go"
 
 ### Tests (write first)
 
-- [ ] T033 [P] [US4] `logging_test.go`: capture `log` output while making requests with basic, STS and bearer credentials against `httptest`, with a proxy URL containing userinfo; assert that no password, key, token or `Authorization` value appears (SC-004)
-- [ ] T034 [P] [US4] `logging_test.go`: one proxy-decision line per client, with mode, source and redacted host; a fallback line on discovery failure (FR-019)
+- [x] T033 [P] [US4] `logging_test.go`: capture `log` output while making requests with basic, STS and bearer credentials against `httptest`, with a proxy URL containing userinfo; assert that no password, key, token or `Authorization` value appears (SC-004)
+- [x] T034 [P] [US4] `logging_test.go`: one proxy-decision line per client, with mode, source and redacted host; a fallback line on discovery failure (FR-019)
 
 ### Implementation
 
-- [ ] T035 [US4] `api.go`: remove the `httputil.DumpRequest(req, true)` block in `NewRequest`; log one redacted debug line (method and path) instead (FR-018, research R-9)
-- [ ] T036 [US4] `proxy.go`: log the decision once per client through `debugf`, with `redactURL` (FR-019)
+- [x] T035 [US4] `api.go`: remove the `httputil.DumpRequest(req, true)` block in `NewRequest`; log one redacted debug line (method and path) instead (FR-018, research R-9)
+- [x] T036 [US4] `proxy.go`: log the decision once per client through `debugf`, with `redactURL` (FR-019)
 
 **Checkpoint**: US1–US4 pass.
 
@@ -194,8 +194,8 @@ description: "Task list for system-proxy awareness in alks-go"
 
 **Independent Test**: a PR without a release label fails the check; merging with `release/minor` produces `v1.1.0` on GHE and github.com.
 
-- [ ] T037 [P] [US5] Create `.github/workflows/check-for-release-label.yml`, modelled on the provider's: it fails unless the PR has `release/patch`, `release/minor`, `release/major` or `release/skip` (FR-022)
-- [ ] T038 [P] [US5] Create `.github/workflows/release-auto.yml`, modelled on the provider's `release-auto.yml`. On a merged PR to `master` labelled `release/patch`, `release/minor` or `release/major`, it:
+- [x] T037 [P] [US5] Create `.github/workflows/check-for-release-label.yml`, modelled on the provider's: it fails unless the PR has `release/patch`, `release/minor`, `release/major` or `release/skip` (FR-022)
+- [x] T038 [P] [US5] Create `.github/workflows/release-auto.yml`, modelled on the provider's `release-auto.yml`. On a merged PR to `master` labelled `release/patch`, `release/minor` or `release/major`, it:
   - checks out the PR's **merge commit**;
   - refuses to run if HEAD already carries a `v*` tag;
   - bumps from the latest `v*` tag;
@@ -204,7 +204,7 @@ description: "Task list for system-proxy awareness in alks-go"
   - **also pushes it to github.com with `GH_COM_TOKEN`**, because a tag pushed with the built-in token does not start `mirror.yml`.
 
   Pin actions to SHAs, as the repository already does. Covers FR-021 and research R-11.
-- [ ] T039 [P] [US5] Create `CHANGELOG.md` with entries for `1.0.0` (baseline, first tag) and `1.1.0` (this work: the new default, the three modes, the options, the first-request User-Agent fix, the logging fix, the `go 1.22` minimum, how to restore old behaviour with `WithProxyMode(ProxyEnvironment)`, the result of T032) (FR-023)
+- [x] T039 [P] [US5] Create `CHANGELOG.md` with entries for `1.0.0` (baseline, first tag) and `1.1.0` (this work: the new default, the three modes, the options, the first-request User-Agent fix, the logging fix, the `go 1.22` minimum, how to restore old behaviour with `WithProxyMode(ProxyEnvironment)`, the result of T032) (FR-023)
 - [ ] T040 [US5] **(manual, Dave)** Optionally make `check_for_release_label` a required status check on `master` (repository setting)
 
 **Checkpoint**: all stories complete.
@@ -213,11 +213,11 @@ description: "Task list for system-proxy awareness in alks-go"
 
 ## Phase 8: Polish & cross-cutting
 
-- [ ] T041 [P] `README.md`: a proxy section (default, modes, explicit URL, `NO_PROXY`, opting out, the container note `http://host.docker.internal:9000`); a section on the options; correct the outdated `NewSTSClient` example (5 arguments shown, 4 real); remove the dead Travis badge (FR-024)
+- [x] T041 [P] `README.md`: a proxy section (default, modes, explicit URL, `NO_PROXY`, opting out, the container note `http://host.docker.internal:9000`); a section on the options; correct the outdated `NewSTSClient` example (5 arguments shown, 4 real); remove the dead Travis badge (FR-024)
 - [ ] T042 [P] Cloud Platform Docs (`ETS-CloudAutomation/Cloud-Platform-Docs`, `app/docs/01_tools_by_cloud_provider/01_aws/06_security_services/02_alks/04_alks_clients/06_alks_go.md`): document the default, the modes and the options. Separate PR in that repository, opened alongside the release (FR-024)
-- [ ] T043 Run the no-cgo cross-build matrix from quickstart.md §2; every target builds (SC-006)
-- [ ] T044 Run `gofmt -l .`, `go vet ./...` and `go test ./...` (with `GOTOOLCHAIN=go1.25.0` on recent macOS); all clean
-- [ ] T045 Check the PAC timing with otto against `testdata/pac-zscaler-like.js` in the integration test; if a single evaluation exceeds the 2 s budget, switch to the goja fallback in research R-1 and re-run T043
+- [x] T043 Run the no-cgo cross-build matrix from quickstart.md §2; every target builds (SC-006)
+- [x] T044 Run `gofmt -l .`, `go vet ./...` and `go test ./...` (with `GOTOOLCHAIN=go1.25.0` on recent macOS); all clean
+- [x] T045 Check the PAC timing with otto against `testdata/pac-zscaler-like.js` in the integration test; if a single evaluation exceeds the 2 s budget, switch to the goja fallback in research R-1 and re-run T043
 - [ ] T046 Tell the `actions-mapper` owners about the new default, the opt-out, and the `go 1.22` minimum before `v1.1.0` is tagged (problem spec open item 4)
 - [ ] T047 Open the PR with the `release/minor` label; on merge confirm `v1.1.0` on GHE, github.com and `proxy.golang.org` (quickstart §5, SC-008); report the tag to the provider work
 
