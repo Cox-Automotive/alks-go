@@ -23,7 +23,7 @@ description: "Task list for system-proxy awareness in alks-go"
 
 **Purpose**: versioning baseline, dependencies, labels
 
-- [ ] T001 **(manual, Dave)** Tag the current `master` (`a8e45b1`) as annotated `v1.0.0` on GHE and push the tag; confirm `mirror.yml` copies it to github.com and that `https://proxy.golang.org/github.com/!cox-!automotive/alks-go/@v/v1.0.0.info` resolves (FR-020)
+- [x] T001 **(manual, Dave)** Tag the current `master` (`a8e45b1`) as annotated `v1.0.0` on GHE and push the tag; confirm `mirror.yml` copies it to github.com and that `https://proxy.golang.org/github.com/!cox-!automotive/alks-go/@v/v1.0.0.info` resolves (FR-020)
 - [x] T002 Create the labels `release/patch`, `release/minor`, `release/major`, `release/skip` on `ETS-CloudAutomation/alks-go` (FR-021, FR-022)
 - [x] T003 Raise the `go` directive in `go.mod` from `1.16` to `1.22` (research R-12)
 - [x] T004 Add `github.com/robertkrimen/otto v0.5.1`, `github.com/mattn/go-ieproxy v0.0.12` and `golang.org/x/net` (for `http/httpproxy`) to `go.mod`; run `go mod tidy` and `go mod vendor`; commit `vendor/` (research R-1, R-3, R-7; Constitution VI)
