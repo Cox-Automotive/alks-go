@@ -1,6 +1,9 @@
 <!--
 Sync Impact Report
-- Version: template → 1.0.0 (initial constitution)
+- Version: 1.0.0 → 1.0.1 (PATCH, wording; review of the setup PR)
+- Principle I: caveat that a trailing variadic parameter changes the function's type
+- Principle IV: names both former dumps (requests and responses), now removed
+- Version history: template → 1.0.0 (initial constitution)
 - Principles added: I–VII
 - Templates: plan-template.md "Constitution Check" gates derive from the principles below; no template edits needed
 - Follow-up: ratify through review of the feat/spec-kit-setup PR; add the label-driven release workflow that Principle VII requires; cut v1.0.0 on the current master
@@ -14,7 +17,7 @@ alks-go is the Go client library for the ALKS API. Its main consumer is the ALKS
 
 ### I. Backward-compatible public API
 
-Consumers pin alks-go to a commit and upgrade on their own schedule, and not all of them are known. Exported functions, types, fields and constructor signatures MUST NOT change in a way that breaks existing callers. New behaviour is added through new functions, new fields, or trailing variadic options on existing constructors. Any unavoidable break needs a major version and an explicit migration note.
+Consumers pin alks-go to a commit and upgrade on their own schedule, and not all of them are known. Exported functions, types, fields and constructor signatures MUST NOT change in a way that breaks existing callers. New behaviour is added through new functions, new fields, or trailing variadic options on existing constructors. A trailing variadic parameter keeps every direct call compiling, but it changes the function's type, so code that stores a constructor in a variable or field of the old function type would break: before adding one, check the known consumers and note it in `CHANGELOG.md`. Any unavoidable break needs a major version and an explicit migration note.
 
 ### II. Pure Go, no cgo
 
@@ -26,7 +29,7 @@ Every behaviour change ships with tests using the standard `testing` package, `n
 
 ### IV. No secrets in logs or errors
 
-Credentials (passwords, access keys, secret keys, session tokens, bearer tokens) and credentials embedded in URLs MUST NOT appear in log output, error messages or test output. Redact before logging. Existing code that dumps whole requests is a known violation to remove, not a pattern to copy.
+Credentials (passwords, access keys, secret keys, session tokens, bearer tokens) and credentials embedded in URLs MUST NOT appear in log output, error messages or test output. Redact before logging. Never dump whole requests or responses: until v1.1.0 `NewRequest` dumped every request (auth headers included) and `decodeBody` every response (session credentials included); both were removed.
 
 ### V. Configuration through code, not the environment
 
@@ -50,4 +53,4 @@ Releases are annotated `vMAJOR.MINOR.PATCH` tags on GHE `master`; the mirror wor
 
 This constitution supersedes conflicting guidance elsewhere in the repository. Operational guidance (commands, layout, known issues) lives in `CLAUDE.md`, which loads this constitution. `CLAUDE.md` must not contradict it; where they conflict, this constitution wins and `CLAUDE.md` is corrected. Amendments are made by pull request that edits this file, bumps the version (MAJOR for removing or redefining a principle, MINOR for adding one, PATCH for wording), and updates the Sync Impact Report. Plans produced by spec-kit MUST pass the Constitution Check against these principles, or record a justified exception in the plan's complexity tracking.
 
-**Version**: 1.0.0 | **Ratified**: 2026-11-06 | **Last Amended**: 2026-11-06
+**Version**: 1.0.1 | **Ratified**: 2026-11-06 | **Last Amended**: 2026-11-06

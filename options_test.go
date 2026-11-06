@@ -71,3 +71,22 @@ func TestProxyModeString(t *testing.T) {
 		}
 	}
 }
+
+func TestUnparseableProxyURLErrorDoesNotLeakCredentials(t *testing.T) {
+	for _, raw := range []string{
+		"http://user:p@ss word@proxy:8080",
+		"http://user:hunter2@proxy:notaport",
+		"http://user:hunter2\x7f@proxy:8080",
+	} {
+		_, err := buildConfig([]ClientOption{WithProxyURL(raw)})
+		if err == nil {
+			t.Errorf("%q: expected an error", raw)
+			continue
+		}
+		for _, secret := range []string{"p@ss word", "hunter2", "user:"} {
+			if strings.Contains(err.Error(), secret) {
+				t.Errorf("%q: error leaks %q: %v", raw, secret, err)
+			}
+		}
+	}
+}

@@ -1,6 +1,7 @@
 package alks
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -125,6 +126,12 @@ func buildConfig(opts []ClientOption) (resolvedConfig, error) {
 		}
 		u, err := url.Parse(c.proxyURLRaw)
 		if err != nil {
+			// *url.Error's text embeds the raw URL, credentials included; keep only
+			// the underlying reason.
+			var ue *url.Error
+			if errors.As(err, &ue) {
+				err = ue.Err
+			}
 			return r, fmt.Errorf("alks: invalid proxy URL %q: %v", redactRawURL(c.proxyURLRaw), err)
 		}
 		if (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {

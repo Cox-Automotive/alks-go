@@ -11,6 +11,12 @@ on:
     types: [closed]
     branches: [master]
 
+# One release at a time: two labelled PRs merged close together would otherwise
+# compute the same next version and race for the tag.
+concurrency:
+  group: alks-go-release
+  cancel-in-progress: false
+
 jobs:
   release:
     if: ${{ github.event.pull_request.merged == true }}
@@ -80,5 +86,27 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           git tag -a "$TAG" -m "${TAG}: PR #${PR_NUMBER} ${PR_TITLE}"
-          git push origin "$TAG"
-          git push "https://x-access-token:${GHCOM_TOKEN}@github.com/Cox-Automotive/alks-go.git" "$TAG"
+          HEAD_SHA="$(git rev-parse HEAD)"
+          MIRROR="https://x-access-token:${GHCOM_TOKEN}@github.com/Cox-Automotive/alks-go.git"
+
+          # Push a tag unless the remote already has it on this commit, so a re-run
+          # after a partial failure can finish the job. A tag on a different commit
+          # is an error.
+          push_tag() {
+            remote="$1"; name="$2"
+            existing="$(git ls-remote --tags "$remote" "refs/tags/${TAG}^{}" | cut -f1)"
+            if [ -z "$existing" ]; then
+              git push "$remote" "refs/tags/${TAG}"
+              echo "pushed ${TAG} to ${name}"
+            elif [ "$existing" = "$HEAD_SHA" ]; then
+              echo "${TAG} already on ${name} at this commit; skipping"
+            else
+              echo "::error::${TAG} already exists on ${name} at ${existing}, not ${HEAD_SHA}"
+              exit 1
+            fi
+          }
+
+          # github.com first: it is where Go consumers resolve the module. If it
+          # fails, nothing has been published and the job can simply be re-run.
+          push_tag "$MIRROR" "github.com"
+          push_tag origin "GHE"

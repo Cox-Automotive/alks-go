@@ -60,3 +60,20 @@ func matchesException(host string, cfg osProxyConfig) bool {
 	}
 	return false
 }
+
+// normalizeWinHTTPProxy turns a WinHTTP proxy answer into "host:port". WinHTTP can
+// answer "host:port", "http://host:port", "PROXY host:port" or the per-scheme form
+// "http=host:port" / "https=host:port"; go-ieproxy has already cut the answer at
+// the first ';'. "DIRECT" or an empty answer means a direct connection.
+func normalizeWinHTTPProxy(answer string) string {
+	a := strings.TrimSpace(answer)
+	if strings.EqualFold(a, "DIRECT") {
+		return ""
+	}
+	if i := strings.Index(a, "="); i > 0 && !strings.Contains(a[:i], "/") {
+		a = a[i+1:]
+	}
+	a = strings.TrimPrefix(a, "PROXY ")
+	a = strings.TrimPrefix(a, "http://")
+	return strings.TrimSpace(a)
+}

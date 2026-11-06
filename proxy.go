@@ -140,6 +140,15 @@ func (s *proxySelector) compute(u *url.URL) proxyDecision {
 			return proxyDecision{source: sourceDirect, fallback: err.Error()}
 		}
 		if hostPort == "" {
+			// With only automatic detection (no PAC URL), an empty answer cannot be
+			// told apart from detection finding nothing, so use the static proxy if
+			// there is one, as Windows and go-ieproxy do. An explicit PAC that says
+			// DIRECT is honoured.
+			if cfg.pacURL == "" && cfg.autoDetect && cfg.staticHTTPS != "" && !matchesException(host, cfg) {
+				if p := parseHostPort(cfg.staticHTTPS); p != nil {
+					return proxyDecision{proxy: p, source: sourceOSStatic}
+				}
+			}
 			return proxyDecision{source: sourcePAC}
 		}
 		if p := parseHostPort(hostPort); p != nil {

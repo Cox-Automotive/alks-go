@@ -38,6 +38,5 @@ func (windowsOSProxy) pacProxyFor(_ osProxyConfig, u *url.URL) (string, error) {
 	// An empty answer means DIRECT, or that automatic detection found nothing.
 	auto := ieproxy.GetConf().Automatic
 	hostPort := strings.TrimSpace(auto.FindProxyForURL(u.String()))
-	hostPort = strings.TrimPrefix(strings.TrimPrefix(hostPort, "http://"), "PROXY ")
-	return hostPort, nil
+	return normalizeWinHTTPProxy(hostPort), nil
 }

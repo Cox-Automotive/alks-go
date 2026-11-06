@@ -15,6 +15,7 @@ FEATURES:
 
   On Linux, FreeBSD and other platforms there is no OS step, so behaviour is unchanged.
 * **PAC and `NO_PROXY` rules.** Only the first entry of a PAC answer is used. If that proxy is unreachable the request fails with an error naming it, and does not fall back to `DIRECT`. `NO_PROXY` also exempts hosts from an OS-discovered proxy. `localhost` and loopback addresses are never proxied.
+* **Windows automatic detection.** When only "Automatically detect settings" is on and detection finds nothing (for example off the corporate network), a manual proxy is used if one is configured, as Windows does. An explicit PAC that answers `DIRECT` is honoured.
 * **Discovery failures are not fatal.** If the OS settings or the PAC cannot be read or evaluated, the client falls back to the environment, then direct, and logs it at debug level.
 * **New constructor options** (trailing, variadic; existing calls compile unchanged):
   * `WithProxyMode(ProxyAuto | ProxyEnvironment | ProxyNone)`
@@ -25,7 +26,7 @@ FEATURES:
 
 SECURITY:
 
-* Requests and responses are no longer logged in full. Previously every request, including authentication headers, and every response body, which can include session credentials, was written to the log. Now one redacted line is logged per request (method and path) and per response (status), plus one line per client recording the proxy decision. Credentials in proxy URLs are removed from logs and errors.
+* Requests and responses are no longer logged in full. Previously every request, including authentication headers, and every response body, which can include session credentials, was written to the log. Now one redacted line is logged per request (method and path) and per response (status), plus one line per client recording the proxy decision. Credentials in proxy URLs are removed from logs and errors, including the error for a proxy URL that cannot be parsed.
 
 BREAKING / NOTES:
 

@@ -31,7 +31,7 @@ go mod vendor                     # after changing dependencies; vendor/ is comm
 
 The Go version comes from `go.mod` (`go-version-file` in CI).
 
-On recent macOS, test binaries built by older Go toolchains abort with `dyld: missing LC_UUID load command` (seen with Go 1.22.12 on 2026-11-06). Run the tests with a current toolchain, for example `GOTOOLCHAIN=go1.25.0 go test ./...`. This is a local toolchain issue, not a code failure; CI on Linux is unaffected.
+On recent macOS, test binaries built by older Go toolchains abort with `dyld: missing LC_UUID load command` (seen with Go 1.22.12 on 2026-11-06). Run the tests with a current toolchain, for example `GOTOOLCHAIN=go1.25.0 go test ./...`. This is a local toolchain issue, not a code failure. CI uses the `go` directive in `go.mod` (1.22), so it compiles at the minimum version and catches standard-library APIs newer than 1.22 that a local 1.25 build would accept. CI also runs `gofmt`, `go vet` and the `CGO_ENABLED=0` cross-build for every provider target.
 
 ## Layout
 

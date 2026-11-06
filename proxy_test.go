@@ -181,3 +181,36 @@ func TestModesOtherThanAuto(t *testing.T) {
 		t.Fatal("OS discovery was set up outside auto mode")
 	}
 }
+
+// Windows: automatic detection with no answer falls through to the static proxy;
+// an explicit PAC that says DIRECT does not.
+func TestAutoDetectEmptyFallsThroughToStatic(t *testing.T) {
+	detect := &fakeOS{cfg: osProxyConfig{autoDetect: true, staticHTTPS: "manual.example.com:8080"}, pacAnswer: map[string]string{}}
+	if d := decideFor(t, httpproxy.Config{}, detect, alksURL); proxyHost(d) != "manual.example.com:8080" || d.source != sourceOSStatic {
+		t.Fatalf("auto-detect empty: got %s / %s", proxyHost(d), d.source)
+	}
+	detectExc := &fakeOS{cfg: osProxyConfig{autoDetect: true, staticHTTPS: "manual.example.com:8080", exceptions: []string{"*.coxautoinc.com"}}, pacAnswer: map[string]string{}}
+	if d := decideFor(t, httpproxy.Config{}, detectExc, alksURL); d.proxy != nil {
+		t.Fatal("exception host was proxied after empty auto-detect")
+	}
+	explicit := &fakeOS{cfg: osProxyConfig{pacURL: "http://pac/x.pac", staticHTTPS: "manual.example.com:8080"}, pacAnswer: map[string]string{}}
+	if d := decideFor(t, httpproxy.Config{}, explicit, alksURL); d.proxy != nil {
+		t.Fatal("explicit PAC DIRECT was overridden by the static proxy")
+	}
+}
+
+func TestNormalizeWinHTTPProxy(t *testing.T) {
+	for in, want := range map[string]string{
+		"127.0.0.1:9000":         "127.0.0.1:9000",
+		"http://127.0.0.1:9000":  "127.0.0.1:9000",
+		"PROXY 127.0.0.1:9000":   "127.0.0.1:9000",
+		"http=127.0.0.1:9000":    "127.0.0.1:9000",
+		"https=proxy.example:80": "proxy.example:80",
+		"DIRECT":                 "",
+		"":                       "",
+	} {
+		if got := normalizeWinHTTPProxy(in); got != want {
+			t.Errorf("%q: got %q want %q", in, got, want)
+		}
+	}
+}
