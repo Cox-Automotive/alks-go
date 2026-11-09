@@ -124,8 +124,9 @@ jobs:
         run: |
           set -euo pipefail
           # A lightweight tag is the same object everywhere (the commit), so GHE
-          # and github.com can never disagree about it and mirror.yml's
-          # `git push --tags` is never rejected after a partial re-run.
+          # and github.com can never disagree about it after a partial re-run.
+          # mirror.yml compares tags by commit and skips this one once it is on
+          # github.com.
           git tag "$TAG" 2>/dev/null || true
           HEAD_SHA="$(git rev-parse HEAD)"
           MIRROR="https://x-access-token:${GHCOM_TOKEN}@github.com/Cox-Automotive/alks-go.git"

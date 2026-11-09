@@ -1,5 +1,15 @@
 name: Mirror to github.com
 
+# Keeps github.com/Cox-Automotive/alks-go (the module path Go consumers resolve)
+# in step with GHE: master on every push to master, and every tag.
+#
+# Tags are pushed one at a time and only when github.com does not already have
+# them. A tag that github.com already has on the same commit is skipped, even if
+# one side holds it as an annotated tag and the other as a lightweight tag (they
+# are different git objects, so a plain `git push --tags` would be rejected and
+# fail every later run). A tag on a different commit is reported and fails the
+# job: published tags are never rewritten.
+
 on:
   push:
     branches:
@@ -20,6 +30,52 @@ jobs:
       - name: Mirror master and tags to github.com
         env:
           GHCOM_TOKEN: ${{ secrets.GH_COM_TOKEN }}
+          REF: ${{ github.ref }}
+        shell: bash
         run: |
-          git push "https://x-access-token:${GHCOM_TOKEN}@github.com/Cox-Automotive/alks-go.git" HEAD:refs/heads/master
-          git push "https://x-access-token:${GHCOM_TOKEN}@github.com/Cox-Automotive/alks-go.git" --tags
+          set -euo pipefail
+          # The tag map below needs associative arrays (bash 4+).
+          if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
+            echo "::error::bash ${BASH_VERSION} is too old; this step needs bash 4 or later"
+            exit 1
+          fi
+          MIRROR="https://x-access-token:${GHCOM_TOKEN}@github.com/Cox-Automotive/alks-go.git"
+
+          # master: only when master itself was pushed (or on a manual run), so a
+          # tag push never moves github.com's master.
+          if [ "$REF" = "refs/heads/master" ] || [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            git push "$MIRROR" "$(git rev-parse refs/remotes/origin/master):refs/heads/master"
+          fi
+
+          # Commit each github.com tag points to (peeled when annotated). Read the
+          # list first so a failed ls-remote stops the job (set -e does not see a
+          # failure inside a process substitution).
+          remote_tags="$(git ls-remote --tags "$MIRROR")"
+          declare -A remote
+          while read -r sha ref; do
+            [ -n "$ref" ] || continue               # no tags on github.com
+            name="${ref#refs/tags/}"
+            if [[ "$name" == *'^{}' ]]; then
+              remote["${name%'^{}'}"]="$sha"        # peeled value wins
+            elif [ -z "${remote[$name]:-}" ]; then
+              remote["$name"]="$sha"
+            fi
+          done <<< "$remote_tags"
+
+          failed=0
+          for tag in $(git tag -l); do
+            local_commit="$(git rev-parse "refs/tags/${tag}^{commit}")"
+            have="${remote[$tag]:-}"
+            if [ -n "$have" ] && [ "$have" != "$local_commit" ]; then
+              # Lightweight remote tag: $have is the commit. Annotated: it is the
+              # peeled commit, recorded above. Either way they differ.
+              echo "::error::tag ${tag} is on ${have} at github.com but on ${local_commit} at GHE; not rewriting a published tag"
+              failed=1
+            elif [ -n "$have" ]; then
+              echo "${tag}: already on github.com at this commit"
+            else
+              git push "$MIRROR" "refs/tags/${tag}"
+              echo "${tag}: pushed"
+            fi
+          done
+          exit "$failed"
