@@ -31,8 +31,14 @@ jobs:
         env:
           GHCOM_TOKEN: ${{ secrets.GH_COM_TOKEN }}
           REF: ${{ github.ref }}
+        shell: bash
         run: |
           set -euo pipefail
+          # The tag map below needs associative arrays (bash 4+).
+          if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
+            echo "::error::bash ${BASH_VERSION} is too old; this step needs bash 4 or later"
+            exit 1
+          fi
           MIRROR="https://x-access-token:${GHCOM_TOKEN}@github.com/Cox-Automotive/alks-go.git"
 
           # master: only when master itself was pushed (or on a manual run), so a
@@ -41,16 +47,20 @@ jobs:
             git push "$MIRROR" "$(git rev-parse refs/remotes/origin/master):refs/heads/master"
           fi
 
-          # Commit each github.com tag points to (peeled when annotated).
+          # Commit each github.com tag points to (peeled when annotated). Read the
+          # list first so a failed ls-remote stops the job (set -e does not see a
+          # failure inside a process substitution).
+          remote_tags="$(git ls-remote --tags "$MIRROR")"
           declare -A remote
           while read -r sha ref; do
+            [ -n "$ref" ] || continue               # no tags on github.com
             name="${ref#refs/tags/}"
             if [[ "$name" == *'^{}' ]]; then
               remote["${name%'^{}'}"]="$sha"        # peeled value wins
             elif [ -z "${remote[$name]:-}" ]; then
               remote["$name"]="$sha"
             fi
-          done < <(git ls-remote --tags "$MIRROR")
+          done <<< "$remote_tags"
 
           failed=0
           for tag in $(git tag -l); do
