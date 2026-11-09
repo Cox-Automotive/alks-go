@@ -107,14 +107,15 @@ func (f *File) inBackoff(pacURL string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-// noteAbort puts pacURL into backoff after a timeout, or when too many
-// evaluations are still running: those are the runs that can leave a goroutine
-// behind. A memory stop is not backed off. The heap is measured for the whole
-// process, so unrelated allocation can trip it, and a false stop should cost one
-// failure TTL, not BackoffAfterAbort. A real memory bomb is stopped again within
-// the limit on every retry.
+// noteAbort puts pacURL into backoff after a timeout: this script stalled, and
+// re-running it can leave another goroutine behind. Nothing else backs off:
+//   - ErrBusy is about other, abandoned evaluations, not this script;
+//   - a memory stop can be a false positive, because the heap is measured for
+//     the whole process. A false stop should cost one failure TTL, not
+//     BackoffAfterAbort, and a real memory bomb is stopped again within the
+//     limit on every retry.
 func (f *File) noteAbort(pacURL string, err error) {
-	if !errors.Is(err, ErrTimeout) && !errors.Is(err, ErrBusy) {
+	if !errors.Is(err, ErrTimeout) {
 		return
 	}
 	f.mu.Lock()

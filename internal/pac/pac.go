@@ -7,7 +7,8 @@
 //   - a heap-growth limit, sampled while the script runs;
 //   - a JavaScript stack-depth limit, so unbounded recursion becomes a script
 //     error instead of a Go stack overflow that would kill the process;
-//   - a cap on evaluations still running, so abandoned goroutines cannot pile up.
+//   - a cap on abandoned evaluations still running, so their goroutines cannot
+//     pile up (evaluations that finish normally never count).
 //
 // File adds a size limit on the script and a backoff after an aborted run. A
 // PAC file can be fetched over plain HTTP, so it is treated as untrusted input.
@@ -36,9 +37,10 @@ var ErrTimeout = errors.New("pac: evaluation timed out")
 // evaluation.
 var ErrMemory = errors.New("pac: evaluation stopped: memory limit exceeded")
 
-// ErrBusy is returned when maxRunning evaluations are already running (or were
-// abandoned and have not finished), so no further goroutine is started.
-var ErrBusy = errors.New("pac: too many evaluations still running")
+// ErrBusy is returned when maxAbandoned evaluations were abandoned (after a
+// timeout or memory stop) and are still running, so no further goroutine is
+// started. Healthy evaluations running at the same time never count.
+var ErrBusy = errors.New("pac: too many abandoned evaluations still running")
 
 const (
 	// stackDepthLimit bounds JavaScript call depth. Real PAC files are flat; this
@@ -49,13 +51,21 @@ const (
 	memoryLimit = 256 << 20 // 256 MiB
 	// memoryCheckEvery is how often the heap is sampled during an evaluation.
 	memoryCheckEvery = 20 * time.Millisecond
-	// maxRunning bounds concurrent evaluations, including abandoned ones, so a
-	// builtin that ignores the interrupt cannot pile up goroutines.
-	maxRunning = 4
+	// maxAbandoned bounds evaluations that were abandoned but have not returned,
+	// so a builtin that ignores the interrupt cannot pile up goroutines.
+	maxAbandoned = 4
 )
 
-// running counts evaluations whose goroutine has not returned.
-var running atomic.Int32
+// abandoned counts abandoned evaluations whose goroutine has not returned.
+var abandoned atomic.Int32
+
+// States of one evaluation, so that exactly one side (the goroutine finishing,
+// or run giving up on it) decides whether it counts as abandoned.
+const (
+	evalRunning int32 = iota
+	evalFinished
+	evalAbandoned
+)
 
 type halt struct{ err error }
 
@@ -108,27 +118,33 @@ type result struct {
 // run executes src in a fresh VM and then calls after, all within budget and
 // within memoryLimit of heap growth.
 func run(src string, budget time.Duration, after func(*otto.Otto) (string, error)) (string, error) {
-	if running.Add(1) > maxRunning {
-		running.Add(-1)
+	if abandoned.Load() >= maxAbandoned {
 		return "", ErrBusy
 	}
 	vm := otto.New()
 	if err := register(vm); err != nil {
-		running.Add(-1)
 		return "", err
 	}
 	vm.SetStackDepthLimit(stackDepthLimit)
 	vm.Interrupt = make(chan func(), 1)
+	var state atomic.Int32 // evalRunning
 	stop := func(err error) {
 		select {
 		case vm.Interrupt <- func() { panic(halt{err: err}) }:
 		default:
 		}
+		if state.CompareAndSwap(evalRunning, evalAbandoned) {
+			abandoned.Add(1)
+		}
 	}
 
 	done := make(chan result, 1)
 	go func() {
-		defer running.Add(-1)
+		defer func() {
+			if !state.CompareAndSwap(evalRunning, evalFinished) {
+				abandoned.Add(-1) // run gave up on us and counted us
+			}
+		}()
 		defer func() {
 			if r := recover(); r != nil {
 				if h, ok := r.(halt); ok {
@@ -170,8 +186,8 @@ func run(src string, budget time.Duration, after func(*otto.Otto) (string, error
 		case <-timer.C:
 			// Ask the VM to stop at its next statement. A native builtin that is
 			// still running cannot be stopped; its goroutine is abandoned (and
-			// counted against maxRunning until it returns), and the caller treats
-			// the timeout as a discovery failure.
+			// counted against maxAbandoned until it returns), and the caller
+			// treats the timeout as a discovery failure.
 			stop(ErrTimeout)
 			return "", ErrTimeout
 		}

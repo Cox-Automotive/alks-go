@@ -119,3 +119,21 @@ func TestFileMemoryStopIsNotBackedOff(t *testing.T) {
 		t.Fatalf("in backoff until %v after a memory stop", until)
 	}
 }
+
+// Clawdius review of alks-go #6: ErrBusy is about other evaluations, so it does
+// not put a healthy PAC file into backoff.
+func TestFileBusyIsNotBackedOff(t *testing.T) {
+	pacURL, _ := serve(t, `function FindProxyForURL(u, h) { return "PROXY 127.0.0.1:9000"; }`)
+	f := &File{TTL: time.Minute}
+	u := mustURL(t, "https://alks.example.test/")
+	prev := abandoned.Load()
+	abandoned.Store(maxAbandoned)
+	_, err := f.ProxyFor(pacURL, u)
+	abandoned.Store(prev)
+	if !errors.Is(err, ErrBusy) {
+		t.Fatalf("got %v, want ErrBusy", err)
+	}
+	if got, err := f.ProxyFor(pacURL, u); err != nil || got != "127.0.0.1:9000" {
+		t.Fatalf("after the busy period: got %q, %v; want the proxy (no backoff)", got, err)
+	}
+}

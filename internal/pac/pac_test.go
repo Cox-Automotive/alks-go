@@ -9,15 +9,15 @@ import (
 )
 
 // waitIdle makes the test wait, at cleanup, for any evaluation goroutine it
-// abandoned, so later tests do not see its heap use or hit maxRunning.
+// abandoned, so later tests do not see its heap use or hit maxAbandoned.
 func waitIdle(t *testing.T) {
 	t.Helper()
 	t.Cleanup(func() {
 		deadline := time.Now().Add(60 * time.Second)
-		for running.Load() > 0 && time.Now().Before(deadline) {
+		for abandoned.Load() > 0 && time.Now().Before(deadline) {
 			time.Sleep(10 * time.Millisecond)
 		}
-		if n := running.Load(); n > 0 {
+		if n := abandoned.Load(); n > 0 {
 			t.Errorf("%d evaluations still running after 60s", n)
 		}
 	})
@@ -243,11 +243,54 @@ func TestMemoryGrowthIsStopped(t *testing.T) {
 	}
 }
 
-func TestTooManyRunningEvaluations(t *testing.T) {
-	prev := running.Load()
-	running.Store(maxRunning)
-	defer running.Store(prev)
+func TestTooManyAbandonedEvaluations(t *testing.T) {
+	prev := abandoned.Load()
+	abandoned.Store(maxAbandoned)
+	defer abandoned.Store(prev)
 	if _, err := Compile("function FindProxyForURL(u, h) { return 'DIRECT'; }", time.Second); !errors.Is(err, ErrBusy) {
 		t.Fatalf("got %v, want ErrBusy", err)
+	}
+}
+
+// Clawdius review of alks-go #6: healthy evaluations running at the same time
+// never hit the cap; only abandoned ones count.
+func TestConcurrentHealthyEvaluationsAreNotRefused(t *testing.T) {
+	s, err := Compile("function FindProxyForURL(u, h) { for (var i = 0; i < 20000; i++) {} return 'PROXY 127.0.0.1:9000'; }", 2*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const n = 4 * maxAbandoned
+	errs := make(chan error, n)
+	for i := 0; i < n; i++ {
+		go func() {
+			_, err := s.FindProxyForURL("https://alks.example.test/", 5*time.Second)
+			errs <- err
+		}()
+	}
+	for i := 0; i < n; i++ {
+		if err := <-errs; err != nil {
+			t.Errorf("concurrent evaluation failed: %v", err)
+		}
+	}
+	if a := abandoned.Load(); a != 0 {
+		t.Fatalf("abandoned = %d after healthy evaluations, want 0", a)
+	}
+}
+
+func TestAbandonedCountReturnsToZero(t *testing.T) {
+	waitIdle(t)
+	s, err := Compile("function FindProxyForURL(u, h) { while (true) {} }", 2*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.FindProxyForURL("https://alks.example.test/", 50*time.Millisecond); !errors.Is(err, ErrTimeout) {
+		t.Fatalf("got %v, want ErrTimeout", err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for abandoned.Load() != 0 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if a := abandoned.Load(); a != 0 {
+		t.Fatalf("abandoned = %d after the interrupted loop stopped, want 0", a)
 	}
 }
