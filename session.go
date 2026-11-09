@@ -171,9 +171,9 @@ func (c *Client) CreateSession(sessionDuration int, useIAM bool) (*SessionRespon
 	resp, httpErr := c.http.Do(req)
 	if httpErr != nil {
 		return nil, &AlksError{
-			StatusCode: resp.StatusCode,
+			StatusCode: 0,
 			RequestId:  "",
-			Err:        err,
+			Err:        httpErr,
 		}
 	}
 

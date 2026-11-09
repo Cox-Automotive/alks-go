@@ -21,3 +21,27 @@ jobs:
 
       - name: Test
         run: go test ./...
+
+      # Constitution Delivery and Principle II: formatting, vet, and a cgo-free
+      # build for every target the Terraform provider releases.
+      - name: gofmt
+        run: |
+          out="$(gofmt -l $(git ls-files '*.go' | grep -v '^vendor/'))"
+          if [ -n "$out" ]; then echo "::error::gofmt needed:"; echo "$out"; exit 1; fi
+
+      - name: go vet (all platforms with OS-specific code)
+        run: |
+          go vet ./...
+          GOOS=darwin go vet ./...
+          GOOS=windows go vet ./...
+
+      - name: No-cgo cross-build
+        run: |
+          set -e
+          for os in windows linux darwin freebsd; do
+            for arch in amd64 386 arm arm64; do
+              case "$os/$arch" in darwin/386|darwin/arm) continue ;; esac
+              echo "building $os/$arch"
+              CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build ./...
+            done
+          done

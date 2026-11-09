@@ -1,0 +1,151 @@
+name: alks-go Release
+
+# Tags a release when a PR labelled release/patch or release/minor is merged to
+# master (constitution Principle VII). release/skip, or no release label, releases
+# nothing. release/major is refused: Go cannot resolve a v2+ tag without a /v2
+# module path. The tag is pushed to github.com (where Go consumers resolve the
+# module) and to GHE. The mirror workflow does not run for a tag pushed with the
+# built-in token, so this job pushes it to github.com itself.
+#
+# Recovery: if a run was cancelled (only one release can be pending at a time) or
+# failed part-way, run this workflow by hand with the PR number. A re-run is safe:
+# a tag already on a remote at the same commit is skipped.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: 'Number of the merged PR to release'
+        required: true
+
+concurrency:
+  group: alks-go-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true }}
+    runs-on: cai-standard-x86-linux
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Resolve the PR
+        id: pr
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT: ${{ github.event_name }}
+          INPUT_PR: ${{ inputs.pr }}
+          EV_NUMBER: ${{ github.event.pull_request.number }}
+          EV_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          EV_TITLE: ${{ github.event.pull_request.title }}
+          EV_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            case "$INPUT_PR" in ''|*[!0-9]*) echo "::error::pr must be a number"; exit 1 ;; esac
+            pr="$(curl -fsS -H "Authorization: token ${TOKEN}" "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/pulls/${INPUT_PR}")"
+            [ "$(echo "$pr" | jq -r .merged)" = "true" ] || { echo "::error::PR #${INPUT_PR} is not merged"; exit 1; }
+            number="$INPUT_PR"
+            sha="$(echo "$pr" | jq -r .merge_commit_sha)"
+            title="$(echo "$pr" | jq -r .title)"
+            labels="$(echo "$pr" | jq -r '[.labels[].name] | join(",")')"
+          else
+            number="$EV_NUMBER"; sha="$EV_SHA"; title="$EV_TITLE"; labels="$EV_LABELS"
+          fi
+          found="$(echo ",${labels}," | grep -oE ',release/[a-z]+' | tr -d ',' | sort -u)"
+          count="$(echo "$found" | grep -c . || true)"
+          level=""
+          if [ "$count" -gt 1 ]; then
+            echo "::error::PR #${number} has more than one release label (${found}); nothing released"
+            exit 1
+          fi
+          case "$found" in
+            release/major) echo "::error::release/major is not supported without a /v2 module path; nothing released"; exit 1 ;;
+            release/minor) level=minor ;;
+            release/patch) level=patch ;;
+          esac
+          [ -n "$level" ] || echo "No release/patch or release/minor label: nothing to release."
+          {
+            echo "number=${number}"
+            echo "sha=${sha}"
+            echo "level=${level}"
+          } >> "$GITHUB_OUTPUT"
+          # The title can contain anything; pass it through a file, not an output line.
+          printf '%s' "$title" > "${RUNNER_TEMP}/pr-title"
+
+      - name: Check out the PR's merge commit
+        if: ${{ steps.pr.outputs.level != '' }}
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ steps.pr.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Work out the version
+        if: ${{ steps.pr.outputs.level != '' }}
+        id: version
+        env:
+          LEVEL: ${{ steps.pr.outputs.level }}
+        run: |
+          set -euo pipefail
+          # Already released (for example, a re-run after the tag reached GHE):
+          # reuse that tag so the remaining pushes can finish.
+          existing="$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
+          if [ -n "$existing" ]; then
+            echo "This commit is already tagged ${existing}; finishing that release."
+            echo "tag=${existing}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          latest="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n 1)"
+          if [ -z "$latest" ]; then
+            echo "::error::No v* tag exists yet. Tag the baseline by hand first."
+            exit 1
+          fi
+          IFS=. read -r major minor patch <<< "${latest#v}"
+          case "$LEVEL" in
+            minor) minor=$((minor + 1)); patch=0 ;;
+            patch) patch=$((patch + 1)) ;;
+          esac
+          tag="v${major}.${minor}.${patch}"
+          echo "Releasing ${tag} (previous ${latest}, level ${LEVEL})"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          if ! grep -q "^## ${tag#v}" CHANGELOG.md; then
+            echo "::warning::CHANGELOG.md has no '## ${tag#v}' entry"
+          fi
+
+      - name: Tag and push to github.com and GHE
+        if: ${{ steps.pr.outputs.level != '' }}
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          GHCOM_TOKEN: ${{ secrets.GH_COM_TOKEN }}
+        run: |
+          set -euo pipefail
+          # A lightweight tag is the same object everywhere (the commit), so GHE
+          # and github.com can never disagree about it and mirror.yml's
+          # `git push --tags` is never rejected after a partial re-run.
+          git tag "$TAG" 2>/dev/null || true
+          HEAD_SHA="$(git rev-parse HEAD)"
+          MIRROR="https://x-access-token:${GHCOM_TOKEN}@github.com/Cox-Automotive/alks-go.git"
+
+          # Push a tag unless the remote already has it on this commit. A tag on a
+          # different commit is an error.
+          push_tag() {
+            remote="$1"; name="$2"
+            existing="$(git ls-remote --tags "$remote" "refs/tags/${TAG}" "refs/tags/${TAG}^{}" | awk '{print $1}' | tail -n 1)"
+            if [ -z "$existing" ]; then
+              git push "$remote" "refs/tags/${TAG}"
+              echo "pushed ${TAG} to ${name}"
+            elif [ "$existing" = "$HEAD_SHA" ]; then
+              echo "${TAG} already on ${name} at this commit; skipping"
+            else
+              echo "::error::${TAG} already exists on ${name} at ${existing}, not ${HEAD_SHA}"
+              exit 1
+            fi
+          }
+
+          # github.com first: it is where Go consumers resolve the module.
+          push_tag "$MIRROR" "github.com"
+          push_tag origin "GHE"

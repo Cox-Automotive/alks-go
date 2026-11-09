@@ -134,7 +134,7 @@ func (c *Client) GetLoginRole() (*LoginRoleResponse, *AlksError) {
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, &AlksError{
-			StatusCode: resp.StatusCode,
+			StatusCode: 0,
 			RequestId:  "",
 			Err:        err,
 		}
