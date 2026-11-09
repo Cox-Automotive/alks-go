@@ -187,3 +187,84 @@ func TestNoSessionCredentialsInLogs(t *testing.T) {
 		}
 	}
 }
+
+// A redirect to another host must not carry the STS credential headers. Go
+// strips Authorization itself, but copies custom headers.
+func TestSTSCredentialsNotForwardedOnCrossHostRedirect(t *testing.T) {
+	captureLog(t)
+	var got http.Header
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Clone()
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"statusMessage":"Success"}`)
+	}))
+	t.Cleanup(other.Close)
+	sameHostHits := 0
+	var sameHostHeader string
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/rest/loginRoles/id/me":
+			http.Redirect(w, r, other.URL+"/elsewhere", http.StatusTemporaryRedirect)
+		case "/rest/same-host":
+			http.Redirect(w, r, "/rest/landed", http.StatusTemporaryRedirect)
+		case "/rest/landed":
+			sameHostHits++
+			sameHostHeader = r.Header.Get(secretKeyHeader)
+			fmt.Fprint(w, `{}`)
+		}
+	}))
+	t.Cleanup(origin.Close)
+
+	c, err := NewSTSClient(origin.URL+"/rest", "AKID-SECRET", "SK-SECRET", "TOKEN-SECRET")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == nil {
+		t.Fatal("the redirect was not followed")
+	}
+	for _, h := range stsSecretHeaders {
+		if v := got.Get(h); v != "" {
+			t.Errorf("%s forwarded to another host: %q", h, v)
+		}
+	}
+
+	// A redirect on the same host keeps the credentials.
+	req, _ := c.NewRequest(nil, "GET", "/same-host")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if sameHostHits != 1 || sameHostHeader != "SK-SECRET" {
+		t.Fatalf("same-host redirect lost credentials: hits=%d header=%q", sameHostHits, sameHostHeader)
+	}
+}
+
+// A request that fails outright (no response at all) returns an error instead of
+// crashing on a nil response.
+func TestFailedRequestsDoNotPanic(t *testing.T) {
+	captureLog(t)
+	dead := "http://" + closedPort(t) + "/rest"
+	c, err := NewClient(dead, "u", "p", "012345678910/ALKSAdmin - awstest", "Admin", WithProxyMode(ProxyNone))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("panicked on a failed request: %v", r)
+		}
+	}()
+	if _, aerr := c.CreateIamSession(); aerr == nil {
+		t.Error("CreateIamSession: expected an error")
+	}
+	if _, aerr := c.GetLoginRole(); aerr == nil {
+		t.Error("GetLoginRole: expected an error")
+	}
+	if _, aerr := c.IsIamEnabled(""); aerr == nil {
+		t.Error("IsIamEnabled: expected an error")
+	}
+	sts, _ := NewSTSClient(dead, "a", "b", "c", WithProxyMode(ProxyNone))
+	if _, aerr := sts.CreateSession(1, false); aerr == nil {
+		t.Error("CreateSession: expected an error")
+	}
+}

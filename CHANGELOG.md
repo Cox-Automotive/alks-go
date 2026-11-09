@@ -30,6 +30,12 @@ SECURITY:
 
 * Requests and responses are no longer logged in full. Previously every request, including authentication headers, and every response body, which can include session credentials, was written to the log. Now one redacted line is logged per request (method and path) and per response (status), plus one line per client recording the proxy decision. Credentials in proxy URLs are removed from logs and errors, including the error for a proxy URL that cannot be parsed or has no `scheme://` (for example `user:pass@host:port`). User information in PAC answers is removed from logs.
 
+* **STS credentials are no longer forwarded on a redirect to another host.** Go removes `Authorization` on a cross-host redirect but copies custom headers, so a redirect to a different host or port, or from https to http, used to carry the `ALKS-STS-Access-Key`, `ALKS-STS-Secret-Key` and `ALKS-STS-Session-Token` headers to that server. They are now removed, and a warning is logged. Clients built with `WithHTTPClient` keep their own redirect policy.
+
+BUG FIXES:
+
+* A request that fails outright (connection refused, DNS, timeout, unreachable proxy) no longer crashes the program with a nil-pointer panic in `CreateSession`, `CreateIamSession`, `GetLoginRole` or `IsIamEnabled`. It returns an error, and `CreateSession` now reports the actual failure.
+
 BREAKING / NOTES:
 
 * **Minimum Go version is now 1.22** (was 1.16), required by the PAC engine (`github.com/robertkrimen/otto`).

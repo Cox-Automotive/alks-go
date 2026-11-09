@@ -1,6 +1,7 @@
 package alks
 
 import (
+	"errors"
 	"net"
 	"net/http"
 	"net/url"
@@ -50,7 +51,36 @@ func newHTTPClient(cfg resolvedConfig) *http.Client {
 	default:
 		t.Proxy = newProxySelector(httpproxy.FromEnvironment(), newOSProxySource()).proxy
 	}
-	return &http.Client{Transport: t}
+	return &http.Client{Transport: t, CheckRedirect: keepCredentialsOnRedirect}
+}
+
+// stsSecretHeaders carry STS credentials (see credentials.go). Go removes the
+// Authorization header on a redirect to another host, but copies custom headers,
+// so these must be removed by hand.
+var stsSecretHeaders = []string{accessKeyHeader, secretKeyHeader, sessionTokenHeader}
+
+// keepCredentialsOnRedirect is the client's CheckRedirect. It follows redirects
+// as Go does by default (up to 10), but never forwards the ALKS STS credential
+// headers to a different host or port, or from https to http.
+func keepCredentialsOnRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return errors.New("alks: stopped after 10 redirects")
+	}
+	first := via[0].URL
+	if strings.EqualFold(req.URL.Host, first.Host) && !(first.Scheme == "https" && req.URL.Scheme != "https") {
+		return nil
+	}
+	removed := false
+	for _, h := range stsSecretHeaders {
+		if req.Header.Get(h) != "" {
+			req.Header.Del(h)
+			removed = true
+		}
+	}
+	if removed {
+		warnf("redirect from %s://%s to %s://%s: ALKS credentials were not forwarded", first.Scheme, first.Host, req.URL.Scheme, req.URL.Host)
+	}
+	return nil
 }
 
 // Cache lifetimes. Successful decisions and OS settings are re-checked after
