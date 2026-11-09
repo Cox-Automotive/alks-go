@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"net/http"
 	"net/url"
 	"strings"
 	"testing"
@@ -320,4 +321,45 @@ func TestConfigFromIEProxy(t *testing.T) {
 	if c := configFromIEProxy(all); c.staticHTTPS != "single.example:3128" {
 		t.Errorf("single proxy for all protocols: %+v", c)
 	}
+}
+
+// Cody's review sec-3: for https, the PAC sees only scheme://host[:port]/.
+func TestPACTargetStripsHTTPSPathAndQuery(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://alks.example.test/rest/loginRoles/id/me?account=123": "https://alks.example.test/",
+		"https://alks.example.test:8443/x#frag":                       "https://alks.example.test:8443/",
+		"http://intranet/path?q=1":                                    "http://intranet/path?q=1",
+	} {
+		u, err := url.Parse(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := pacTarget(u).String(); got != want {
+			t.Errorf("pacTarget(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// The selector passes the stripped URL to the OS source.
+func TestSelectorPassesStrippedURLToPAC(t *testing.T) {
+	src := &recordingPACSource{}
+	sel := newProxySelector(&httpproxy.Config{}, src)
+	req, _ := http.NewRequest("GET", "https://alks.example.test/rest/getAccounts?secret=1", nil)
+	if _, err := sel.proxy(req); err != nil {
+		t.Fatal(err)
+	}
+	if src.seen != "https://alks.example.test/" {
+		t.Fatalf("PAC asked about %q, want only scheme and host", src.seen)
+	}
+}
+
+type recordingPACSource struct{ seen string }
+
+func (r *recordingPACSource) config() (osProxyConfig, error) {
+	return osProxyConfig{pacURL: "http://pac.example.test/proxy.pac"}, nil
+}
+
+func (r *recordingPACSource) pacProxyFor(_ osProxyConfig, u *url.URL) (string, error) {
+	r.seen = u.String()
+	return "", nil
 }

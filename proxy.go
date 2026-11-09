@@ -208,7 +208,7 @@ func (s *proxySelector) compute(u *url.URL) proxyDecision {
 
 	// 4. PAC (or Windows automatic detection): the first entry of the answer wins.
 	if cfg.hasPAC() {
-		hostPort, err := s.src.pacProxyFor(cfg, u)
+		hostPort, err := s.src.pacProxyFor(cfg, pacTarget(u))
 		if err != nil {
 			return proxyDecision{source: sourceDirect, fallback: err.Error()}
 		}

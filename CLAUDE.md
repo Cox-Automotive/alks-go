@@ -37,7 +37,7 @@ On recent macOS, test binaries built by older Go toolchains abort with `dyld: mi
 
 - `api.go`: the `Client` type, the constructors (`NewClient`, `NewSTSClient`, `NewBearerTokenClient`, each taking trailing `...ClientOption`), `NewRequest`, response decoding.
 - `options.go`: `ClientOption`, `ProxyMode`, `WithProxyMode`, `WithProxyURL`, `WithUserAgent`, `WithHTTPClient`.
-- `proxy.go`: the HTTP client and proxy selection (environment, then OS PAC, then OS static proxy, then direct), cached per host. `osproxy*.go`: the OS source per platform (macOS `scutil`, Windows `go-ieproxy`, others none). `pacfile.go` and `internal/pac/`: PAC fetch and pure-Go evaluation (otto). Tests replace the OS source through `newOSProxySource`.
+- `proxy.go`: the HTTP client and proxy selection (environment, then OS PAC, then OS static proxy, then direct), cached per host. `osproxy*.go`: the OS source per platform (macOS `scutil`, Windows `go-ieproxy`, others none). `internal/pac/`: PAC fetch, cache and pure-Go evaluation (otto), bounded in time, heap growth and concurrent runs. Only `osproxy_darwin.go` imports it, so other platforms don't link otto; tests import it directly. `pacTarget` (in `osproxy.go`) strips https paths before any PAC lookup. Tests replace the OS source through `newOSProxySource`.
 - `credentials.go`: auth injection (`Basic`, `STS`, `Bearer`).
 - One file per API area (`iam_role.go`, `iam_user.go`, `session.go`, `login_role.go`, ...), each with a `_test.go`.
 - `testutils/`: a small local HTTP server for tests.

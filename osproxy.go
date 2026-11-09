@@ -32,6 +32,18 @@ type osProxySource interface {
 	pacProxyFor(cfg osProxyConfig, u *url.URL) (string, error)
 }
 
+// pacTarget is the URL a PAC script (or WinHTTP's PAC evaluation) is asked about.
+// For https it is reduced to scheme://host[:port]/, as browsers do, so the script,
+// which may arrive over plain HTTP and can leak what it sees through DNS lookups,
+// never sees the request path or query. Decisions are cached per scheme, host and
+// port, so the path never affected the answer.
+func pacTarget(u *url.URL) *url.URL {
+	if u.Scheme == "https" {
+		return &url.URL{Scheme: u.Scheme, Host: u.Host, Path: "/"}
+	}
+	return u
+}
+
 // newOSProxySource returns the source for the current platform. Tests replace it.
 var newOSProxySource = platformOSProxySource
 

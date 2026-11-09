@@ -2,6 +2,21 @@
 
 Releases are tags on `ghe.coxautoinc.com/ETS-CloudAutomation/alks-go`, mirrored to `github.com/Cox-Automotive/alks-go` (the module path). Label a pull request `release/patch`, `release/minor`, `release/major` or `release/skip`; merging it tags the next version. Add an entry here in the same pull request.
 
+## 1.1.1
+
+PAC hardening (Rally F325998, from review of the Terraform provider's 2.9.0 pull request).
+
+SECURITY:
+
+* **The PAC script no longer sees the request path or query.** For https requests it is asked about `https://host[:port]/` only, as browsers do. This applies to the macOS evaluator and the Windows WinHTTP lookup. Decisions were already cached per scheme, host and port, so answers are unchanged.
+* **PAC evaluation is bounded in memory as well as time.**
+  * Heap growth during an evaluation is limited to 256 MiB.
+  * At most four evaluations can be running at once, counting ones abandoned after a timeout.
+  * After a timeout, the PAC file is not evaluated again for 15 minutes, so a broken or hostile script cannot leave a new goroutine behind every 30 seconds.
+  * A memory stop is retried after the usual 30 seconds. The heap is measured for the whole process, so unrelated allocation must not cause a long backoff.
+* **PAC files over 512 KiB are rejected,** not truncated. Previously the limit was 2 MiB and a longer file was cut off.
+* **The JavaScript interpreter (otto) is linked only on macOS,** the only platform that evaluates PAC files in Go. Windows, Linux and FreeBSD builds no longer include it.
+
 ## 1.1.0
 
 System-proxy awareness (Rally F325998).

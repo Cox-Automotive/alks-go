@@ -8,6 +8,21 @@ import (
 	"time"
 )
 
+// waitIdle makes the test wait, at cleanup, for any evaluation goroutine it
+// abandoned, so later tests do not see its heap use or hit maxRunning.
+func waitIdle(t *testing.T) {
+	t.Helper()
+	t.Cleanup(func() {
+		deadline := time.Now().Add(60 * time.Second)
+		for running.Load() > 0 && time.Now().Before(deadline) {
+			time.Sleep(10 * time.Millisecond)
+		}
+		if n := running.Load(); n > 0 {
+			t.Errorf("%d evaluations still running after 60s", n)
+		}
+	})
+}
+
 func load(t *testing.T, name string) string {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join("..", "..", "testdata", name))
@@ -52,6 +67,7 @@ func TestBrokenPAC(t *testing.T) {
 }
 
 func TestSlowPACTimesOut(t *testing.T) {
+	waitIdle(t)
 	s, err := Compile(load(t, "pac-slow.js"), 2*time.Second)
 	if err != nil {
 		t.Fatalf("compile: %v", err)
@@ -141,6 +157,7 @@ func TestHelpersInScript(t *testing.T) {
 
 // Sam's review: the interpreter must be bounded in every phase.
 func TestCompileTopLevelLoopTimesOut(t *testing.T) {
+	waitIdle(t)
 	start := time.Now()
 	_, err := Compile("while (true) {}\nfunction FindProxyForURL(u, h) { return 'DIRECT'; }", 200*time.Millisecond)
 	if !errors.Is(err, ErrTimeout) {
@@ -164,14 +181,17 @@ func TestUnboundedRecursionIsAScriptError(t *testing.T) {
 }
 
 func TestBuiltinIgnoringInterruptStillReturnsInBudget(t *testing.T) {
+	waitIdle(t)
 	s, err := Compile("function FindProxyForURL(u, h) { var a = []; a[30000000] = 1; return a.join('x'); }", 2*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
 	start := time.Now()
 	_, err = s.FindProxyForURL("https://alks.example.test/", 300*time.Millisecond)
-	if !errors.Is(err, ErrTimeout) {
-		t.Fatalf("got %v, want ErrTimeout", err)
+	// The 30M-element join is stopped by the budget or, usually first, by the
+	// memory limit; either way the call returns without waiting for the builtin.
+	if !errors.Is(err, ErrTimeout) && !errors.Is(err, ErrMemory) {
+		t.Fatalf("got %v, want ErrTimeout or ErrMemory", err)
 	}
 	if time.Since(start) > 2*time.Second {
 		t.Fatalf("returned after %v, want about the 300ms budget", time.Since(start))
@@ -203,5 +223,31 @@ func TestWeekdayAndTimeRange(t *testing.T) {
 	}
 	if want := "true,false,true,true,false,true,true,false"; got != want {
 		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// Cody's review sec-2: heap growth is bounded, not only time.
+func TestMemoryGrowthIsStopped(t *testing.T) {
+	waitIdle(t)
+	s, err := Compile("function FindProxyForURL(u, h) { var s = 'x'; while (true) { s = s + s; } }", 2*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	_, err = s.FindProxyForURL("https://alks.example.test/", 10*time.Second)
+	if !errors.Is(err, ErrMemory) {
+		t.Fatalf("got %v, want ErrMemory", err)
+	}
+	if time.Since(start) > 5*time.Second {
+		t.Fatalf("stopped after %v, want well before the 10s budget", time.Since(start))
+	}
+}
+
+func TestTooManyRunningEvaluations(t *testing.T) {
+	prev := running.Load()
+	running.Store(maxRunning)
+	defer running.Store(prev)
+	if _, err := Compile("function FindProxyForURL(u, h) { return 'DIRECT'; }", time.Second); !errors.Is(err, ErrBusy) {
+		t.Fatalf("got %v, want ErrBusy", err)
 	}
 }

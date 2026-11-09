@@ -1,12 +1,19 @@
 // Package pac evaluates proxy auto-config (PAC) scripts in pure Go.
 //
 // Every evaluation, including compiling the script's top level, is bounded:
-// a time budget enforced both through otto's interrupt channel (checked between
-// statements) and by abandoning the evaluation if it has not finished (a native
-// builtin can ignore the interrupt), and a JavaScript stack-depth limit so that
-// unbounded recursion becomes a script error instead of a Go stack overflow that
-// would kill the process. A PAC file is fetched over plain HTTP, so it is
-// treated as untrusted input.
+//   - a time budget, enforced through otto's interrupt channel (checked between
+//     statements) and by abandoning the evaluation if it has not finished (a
+//     native builtin can ignore the interrupt);
+//   - a heap-growth limit, sampled while the script runs;
+//   - a JavaScript stack-depth limit, so unbounded recursion becomes a script
+//     error instead of a Go stack overflow that would kill the process;
+//   - a cap on evaluations still running, so abandoned goroutines cannot pile up.
+//
+// File adds a size limit on the script and a backoff after an aborted run. A
+// PAC file can be fetched over plain HTTP, so it is treated as untrusted input.
+//
+// Only the macOS proxy source imports this package, so builds for other
+// platforms do not include the JavaScript interpreter.
 package pac
 
 import (
@@ -14,7 +21,9 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/robertkrimen/otto"
@@ -23,11 +32,32 @@ import (
 // ErrTimeout is returned when a script does not finish within its budget.
 var ErrTimeout = errors.New("pac: evaluation timed out")
 
-// stackDepthLimit bounds JavaScript call depth. Real PAC files are flat; this is
-// far above anything legitimate and far below Go's own stack limit.
-const stackDepthLimit = 500
+// ErrMemory is returned when the heap grows by more than memoryLimit during an
+// evaluation.
+var ErrMemory = errors.New("pac: evaluation stopped: memory limit exceeded")
 
-type halt struct{}
+// ErrBusy is returned when maxRunning evaluations are already running (or were
+// abandoned and have not finished), so no further goroutine is started.
+var ErrBusy = errors.New("pac: too many evaluations still running")
+
+const (
+	// stackDepthLimit bounds JavaScript call depth. Real PAC files are flat; this
+	// is far above anything legitimate and far below Go's own stack limit.
+	stackDepthLimit = 500
+	// memoryLimit is the heap growth allowed while a script runs. Real PAC
+	// evaluation allocates kilobytes.
+	memoryLimit = 256 << 20 // 256 MiB
+	// memoryCheckEvery is how often the heap is sampled during an evaluation.
+	memoryCheckEvery = 20 * time.Millisecond
+	// maxRunning bounds concurrent evaluations, including abandoned ones, so a
+	// builtin that ignores the interrupt cannot pile up goroutines.
+	maxRunning = 4
+)
+
+// running counts evaluations whose goroutine has not returned.
+var running atomic.Int32
+
+type halt struct{ err error }
 
 // Script is a compiled PAC script. It is safe for concurrent use: each
 // evaluation runs in its own VM.
@@ -75,21 +105,34 @@ type result struct {
 	err    error
 }
 
-// run executes src in a fresh VM and then calls after, all within budget.
+// run executes src in a fresh VM and then calls after, all within budget and
+// within memoryLimit of heap growth.
 func run(src string, budget time.Duration, after func(*otto.Otto) (string, error)) (string, error) {
+	if running.Add(1) > maxRunning {
+		running.Add(-1)
+		return "", ErrBusy
+	}
 	vm := otto.New()
 	if err := register(vm); err != nil {
+		running.Add(-1)
 		return "", err
 	}
 	vm.SetStackDepthLimit(stackDepthLimit)
 	vm.Interrupt = make(chan func(), 1)
+	stop := func(err error) {
+		select {
+		case vm.Interrupt <- func() { panic(halt{err: err}) }:
+		default:
+		}
+	}
 
 	done := make(chan result, 1)
 	go func() {
+		defer running.Add(-1)
 		defer func() {
 			if r := recover(); r != nil {
-				if _, ok := r.(halt); ok {
-					done <- result{err: ErrTimeout}
+				if h, ok := r.(halt); ok {
+					done <- result{err: h.err}
 					return
 				}
 				done <- result{err: fmt.Errorf("pac: script failed: %v", r)}
@@ -103,20 +146,35 @@ func run(src string, budget time.Duration, after func(*otto.Otto) (string, error
 		done <- result{answer: a, err: err}
 	}()
 
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	base := ms.HeapAlloc
+	tick := time.NewTicker(memoryCheckEvery)
+	defer tick.Stop()
 	timer := time.NewTimer(budget)
 	defer timer.Stop()
-	select {
-	case r := <-done:
-		return r.answer, r.err
-	case <-timer.C:
-		// Ask the VM to stop at its next statement. A native builtin that is
-		// still running cannot be stopped; its goroutine is abandoned and the
-		// caller treats the timeout as a discovery failure.
+	for {
 		select {
-		case vm.Interrupt <- func() { panic(halt{}) }:
-		default:
+		case r := <-done:
+			return r.answer, r.err
+		case <-tick.C:
+			// The VM stops at its next statement. Growth inside one native
+			// builtin call is only seen here while it runs, and that call
+			// cannot be interrupted; the goroutine is then abandoned as for
+			// a timeout.
+			runtime.ReadMemStats(&ms)
+			if ms.HeapAlloc > base && ms.HeapAlloc-base > memoryLimit {
+				stop(ErrMemory)
+				return "", ErrMemory
+			}
+		case <-timer.C:
+			// Ask the VM to stop at its next statement. A native builtin that is
+			// still running cannot be stopped; its goroutine is abandoned (and
+			// counted against maxRunning until it returns), and the caller treats
+			// the timeout as a discovery failure.
+			stop(ErrTimeout)
+			return "", ErrTimeout
 		}
-		return "", ErrTimeout
 	}
 }
 

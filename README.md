@@ -80,7 +80,7 @@ By default (`ProxyAuto`) the client chooses a proxy for each ALKS request in thi
 
 1. `HTTPS_PROXY` (or `https_proxy`), unless `NO_PROXY` matches the host. This is the same as before v1.1.0.
 2. The operating system's proxy configuration:
-   - **macOS:** the settings shown by `scutil --proxy`. A PAC file is evaluated for the request URL; otherwise the static HTTPS proxy and its exception list are used.
+   - **macOS:** the settings shown by `scutil --proxy`. A PAC file is evaluated for the request's scheme and host (for https, the path and query are not passed to the script, as in browsers); otherwise the static HTTPS proxy and its exception list are used.
    - **Windows:** WinHTTP / Internet Options, including PAC files and automatic detection.
    - **Linux, FreeBSD and others:** no OS step.
 3. A direct connection.
