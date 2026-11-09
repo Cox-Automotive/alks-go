@@ -21,12 +21,17 @@ const (
 // used by the macOS source and by tests on every platform.
 type pacFile struct {
 	mu      sync.Mutex
-	scripts map[string]*pac.Script
+	scripts map[string]cachedScript
 	budget  time.Duration
 }
 
+type cachedScript struct {
+	s       *pac.Script
+	expires time.Time
+}
+
 func newPACFile() *pacFile {
-	return &pacFile{scripts: map[string]*pac.Script{}, budget: pacEvalBudget}
+	return &pacFile{scripts: map[string]cachedScript{}, budget: pacEvalBudget}
 }
 
 // proxyFor returns the proxy named by the first entry of the PAC answer for u, as
@@ -42,7 +47,7 @@ func (p *pacFile) proxyFor(pacURL string, u *url.URL) (string, error) {
 	}
 	hostPort, ok := pac.FirstEntry(answer)
 	if !ok {
-		debugf("PAC answer %q for %s is not supported; connecting directly", answer, u.Host)
+		debugf("PAC answer %q for %s: first entry is not a PROXY entry, so connecting directly (only the first entry is used)", pac.Redact(answer), u.Host)
 	}
 	return hostPort, nil
 }
@@ -50,18 +55,21 @@ func (p *pacFile) proxyFor(pacURL string, u *url.URL) (string, error) {
 func (p *pacFile) script(pacURL string) (*pac.Script, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if s, ok := p.scripts[pacURL]; ok {
-		return s, nil
+	if c, ok := p.scripts[pacURL]; ok && now().Before(c.expires) {
+		return c.s, nil
 	}
 	src, err := fetchPAC(pacURL)
 	if err != nil {
 		return nil, err
 	}
-	s, err := pac.Compile(src)
+	s, err := pac.Compile(src, p.budget)
 	if err != nil {
 		return nil, err
 	}
-	p.scripts[pacURL] = s
+	// Re-fetch after decisionTTL so a changed PAC file is picked up. A failed
+	// fetch or compile is not cached; the caller's failure decision is retried
+	// after failureTTL.
+	p.scripts[pacURL] = cachedScript{s: s, expires: now().Add(decisionTTL)}
 	return s, nil
 }
 

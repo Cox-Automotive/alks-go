@@ -16,7 +16,7 @@ Edit the constitution through `/speckit-constitution` or a PR to `.specify/memor
 
 - Module path: `github.com/Cox-Automotive/alks-go` (unchanged since the GHE migration).
 - Source of truth: `https://ghe.coxautoinc.com/ETS-CloudAutomation/alks-go`. `.github/workflows/mirror.yml` pushes `master` and tags to github.com.
-- Versioning: semver tags from `v1.0.0` (Constitution VII). Label every PR `release/patch|minor|major|skip` (`check-for-release-label.yml`); `release-auto.yml` tags the merge commit and pushes the tag to GHE and to github.com. Add a `CHANGELOG.md` entry in the same PR.
+- Versioning: semver tags from `v1.0.0` (Constitution VII). Label every PR with exactly one of `release/patch`, `release/minor` or `release/skip` (`check-for-release-label.yml`). `release/major` is refused: Go cannot resolve a v2+ tag without a `/v2` module path. `release-auto.yml` tags the merge commit with a lightweight tag and pushes it to github.com, then GHE. To recover a cancelled or failed release, run it by hand with the PR number. Add a `CHANGELOG.md` entry in the same PR.
 - Service catalog: component `CI0042503` (`.cai/catalog.yaml`).
 
 ## Commands

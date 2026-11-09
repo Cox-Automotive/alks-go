@@ -1,10 +1,16 @@
 package alks
 
 import (
+	"bytes"
 	"errors"
+	"io"
+	"log"
 	"net/url"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/mattn/go-ieproxy"
 	"golang.org/x/net/http/httpproxy"
 )
 
@@ -208,9 +214,110 @@ func TestNormalizeWinHTTPProxy(t *testing.T) {
 		"https=proxy.example:80": "proxy.example:80",
 		"DIRECT":                 "",
 		"":                       "",
+		"proxy 127.0.0.1:9000":   "127.0.0.1:9000",
+		"socks=127.0.0.1:1080":   "",
+		"ftp=127.0.0.1:21":       "",
+		"HTTPS=proxy.example:80": "proxy.example:80",
 	} {
 		if got := normalizeWinHTTPProxy(in); got != want {
 			t.Errorf("%q: got %q want %q", in, got, want)
 		}
+	}
+}
+
+// Sam's review: failures are retried, successes expire, failures are warned.
+func TestFailuresAreRetriedAndSuccessesExpire(t *testing.T) {
+	restore := now
+	defer func() { now = restore }()
+	clock := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
+	now = func() time.Time { return clock }
+
+	os := &fakeOS{cfgErr: errors.New("scutil failed")}
+	s := newProxySelector(&httpproxy.Config{}, os)
+	u, _ := url.Parse(alksURL)
+
+	if d := s.decide(u); d.fallback == "" || d.proxy != nil {
+		t.Fatalf("expected a fallback decision, got %+v", d)
+	}
+	s.decide(u) // cached within failureTTL
+	if os.cfgCalls != 1 {
+		t.Fatalf("config read %d times within failureTTL", os.cfgCalls)
+	}
+
+	// The OS proxy becomes available (for example, Zscaler starts).
+	os.cfgErr = nil
+	os.cfg = osProxyConfig{pacURL: "http://127.0.0.1:9000/x.pac"}
+	os.pacAnswer = map[string]string{"alks.coxautoinc.com": "127.0.0.1:9000"}
+	clock = clock.Add(failureTTL + time.Second)
+	if d := s.decide(u); proxyHost(d) != "127.0.0.1:9000" {
+		t.Fatalf("did not recover after failureTTL: %+v", d)
+	}
+
+	// A successful decision is kept within decisionTTL and re-checked after it.
+	calls := os.pacCalls
+	clock = clock.Add(decisionTTL - time.Second)
+	s.decide(u)
+	if os.pacCalls != calls {
+		t.Fatal("successful decision re-evaluated within decisionTTL")
+	}
+	clock = clock.Add(2 * time.Second)
+	s.decide(u)
+	if os.pacCalls != calls+1 {
+		t.Fatal("successful decision not re-evaluated after decisionTTL")
+	}
+}
+
+func TestDiscoveryFailureLoggedAsWarning(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(io.Discard)
+	s := newProxySelector(&httpproxy.Config{}, &fakeOS{cfgErr: errors.New("scutil failed")})
+	u, _ := url.Parse(alksURL)
+	s.decide(u)
+	if !strings.Contains(buf.String(), "[WARN] alks-go: OS proxy discovery failed for alks.coxautoinc.com") {
+		t.Fatalf("no warning: %q", buf.String())
+	}
+}
+
+// Sam's review: OS exception lists can hold IP and CIDR entries.
+func TestExceptionsMatchIPsAndCIDRs(t *testing.T) {
+	cfg := osProxyConfig{exceptions: []string{"169.254/16", "10.0.0.0/8", "192.168.1.5", "*.local"}}
+	for host, want := range map[string]bool{
+		"169.254.169.254":     true,
+		"10.1.2.3":            true,
+		"192.168.1.5":         true,
+		"printer.local":       true,
+		"11.0.0.1":            false,
+		"alks.coxautoinc.com": false,
+	} {
+		if got := matchesException(host, cfg); got != want {
+			t.Errorf("%s: got %v want %v", host, got, want)
+		}
+	}
+}
+
+func TestConfigFromIEProxy(t *testing.T) {
+	var pacOnly, detect, static ieproxy.ProxyConf
+	pacOnly.Automatic.Active, pacOnly.Automatic.PreConfiguredURL = true, "http://127.0.0.1:9000/x.pac"
+	detect.Automatic.Active = true
+	static.Static.Active = true
+	static.Static.Protocols = map[string]string{"https": "proxy.example:8443", "http": "proxy.example:8080"}
+	static.Static.NoProxy = "*.corp;<local>,10.0.0.0/8"
+
+	if c := configFromIEProxy(pacOnly); c.pacURL != "http://127.0.0.1:9000/x.pac" || c.autoDetect {
+		t.Errorf("PAC: %+v", c)
+	}
+	if c := configFromIEProxy(detect); !c.autoDetect || c.pacURL != "" {
+		t.Errorf("auto-detect: %+v", c)
+	}
+	c := configFromIEProxy(static)
+	if c.staticHTTPS != "proxy.example:8443" || len(c.exceptions) != 3 {
+		t.Errorf("static: %+v", c)
+	}
+	var all ieproxy.ProxyConf
+	all.Static.Active = true
+	all.Static.Protocols = map[string]string{"": "single.example:3128"}
+	if c := configFromIEProxy(all); c.staticHTTPS != "single.example:3128" {
+		t.Errorf("single proxy for all protocols: %+v", c)
 	}
 }

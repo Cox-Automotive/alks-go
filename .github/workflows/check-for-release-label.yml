@@ -9,14 +9,19 @@ jobs:
   check_for_release_label:
     runs-on: cai-standard-x86-linux
     steps:
-      - name: Check for a release label
+      - name: Require exactly one release label
         env:
           LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: |
           echo "Labels: ${LABELS}"
-          if echo ",${LABELS}," | grep -qE ',release/(skip|patch|minor|major),'; then
-            echo "Release label found"
-          else
-            echo "::error::Label this PR release/patch, release/minor, release/major or release/skip"
+          found="$(echo ",${LABELS}," | grep -oE ',release/[a-z]+' | tr -d ',' | sort -u)"
+          count="$(echo "$found" | grep -c . || true)"
+          if echo "$found" | grep -qx 'release/major'; then
+            echo "::error::release/major is not supported: a v2 release needs a /v2 module path first (Go rejects v2+ tags on github.com/Cox-Automotive/alks-go)."
             exit 1
           fi
+          if [ "$count" -ne 1 ] || ! echo "$found" | grep -qxE 'release/(patch|minor|skip)'; then
+            echo "::error::Label this PR with exactly one of release/patch, release/minor or release/skip (found: ${found:-none})."
+            exit 1
+          fi
+          echo "Release label: $found"

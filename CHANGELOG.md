@@ -16,17 +16,19 @@ FEATURES:
   On Linux, FreeBSD and other platforms there is no OS step, so behaviour is unchanged.
 * **PAC and `NO_PROXY` rules.** Only the first entry of a PAC answer is used. If that proxy is unreachable the request fails with an error naming it, and does not fall back to `DIRECT`. `NO_PROXY` also exempts hosts from an OS-discovered proxy. `localhost` and loopback addresses are never proxied.
 * **Windows automatic detection.** When only "Automatically detect settings" is on and detection finds nothing (for example off the corporate network), a manual proxy is used if one is configured, as Windows does. An explicit PAC that answers `DIRECT` is honoured.
-* **Discovery failures are not fatal.** If the OS settings or the PAC cannot be read or evaluated, the client falls back to the environment, then direct, and logs it at debug level.
+* **Discovery failures are not fatal, and not permanent.** If the OS settings or the PAC cannot be read or evaluated, the client falls back to the environment, then direct, logs a `[WARN]` line, and tries again after 30 seconds. Successful decisions, the OS settings and the PAC script are re-checked every 5 minutes, so a long-running process picks up network changes.
+* **PAC files are treated as untrusted.** Every evaluation is bounded: a 2-second budget that also covers the script's top level, a JavaScript stack-depth limit (runaway recursion is an error, not a crash), and abandoning a built-in that ignores the budget. The PAC file is limited to 2 MiB. `weekdayRange` and `timeRange` are implemented; `dateRange` always returns true.
+* **OS exception lists** accept IP addresses and CIDR ranges, including the macOS short form `169.254/16`.
 * **New constructor options** (trailing, variadic; existing calls compile unchanged):
   * `WithProxyMode(ProxyAuto | ProxyEnvironment | ProxyNone)`
   * `WithProxyURL(url)`: an explicit proxy for every request; `NO_PROXY` does not apply
   * `WithUserAgent(ua)`
-  * `WithHTTPClient(*http.Client)`: used as is
+  * `WithHTTPClient(*http.Client)`: used as is; combining it with `WithProxyMode` or `WithProxyURL` is an error
 * **Options apply to the constructor's own request.** `NewSTSClient` makes one request (`GET /loginRoles/id/me`), and options now apply to it. Before, that request always went out with User-Agent `alks-go`.
 
 SECURITY:
 
-* Requests and responses are no longer logged in full. Previously every request, including authentication headers, and every response body, which can include session credentials, was written to the log. Now one redacted line is logged per request (method and path) and per response (status), plus one line per client recording the proxy decision. Credentials in proxy URLs are removed from logs and errors, including the error for a proxy URL that cannot be parsed.
+* Requests and responses are no longer logged in full. Previously every request, including authentication headers, and every response body, which can include session credentials, was written to the log. Now one redacted line is logged per request (method and path) and per response (status), plus one line per client recording the proxy decision. Credentials in proxy URLs are removed from logs and errors, including the error for a proxy URL that cannot be parsed or has no `scheme://` (for example `user:pass@host:port`). User information in PAC answers is removed from logs.
 
 BREAKING / NOTES:
 

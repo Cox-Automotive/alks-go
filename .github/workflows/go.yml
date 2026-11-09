@@ -29,8 +29,11 @@ jobs:
           out="$(gofmt -l $(git ls-files '*.go' | grep -v '^vendor/'))"
           if [ -n "$out" ]; then echo "::error::gofmt needed:"; echo "$out"; exit 1; fi
 
-      - name: go vet
-        run: go vet ./...
+      - name: go vet (all platforms with OS-specific code)
+        run: |
+          go vet ./...
+          GOOS=darwin go vet ./...
+          GOOS=windows go vet ./...
 
       - name: No-cgo cross-build
         run: |

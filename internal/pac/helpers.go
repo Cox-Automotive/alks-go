@@ -28,9 +28,9 @@ func register(vm *otto.Otto) error {
 		"myIpAddress":         myIPAddress,
 		"dnsDomainLevels":     dnsDomainLevels,
 		"shExpMatch":          shExpMatch,
-		"weekdayRange":        alwaysTrue,
+		"weekdayRange":        weekdayRange,
 		"dateRange":           alwaysTrue,
-		"timeRange":           alwaysTrue,
+		"timeRange":           timeRange,
 	}
 	for name, f := range funcs {
 		if err := vm.Set(name, f); err != nil {
@@ -185,8 +185,82 @@ func globMatch(pattern, s string) bool {
 	return p == len(pattern)
 }
 
-// weekdayRange, dateRange and timeRange are rarely used in proxy routing; they
-// return true so that a rule using them does not silently fail closed.
+// now is replaceable in tests.
+var now = time.Now
+
+// clock returns the time to use and the arguments without a trailing "GMT".
+func clock(call otto.FunctionCall) (time.Time, []string) {
+	var args []string
+	for i := range call.ArgumentList {
+		args = append(args, arg(call, i))
+	}
+	t := now()
+	if n := len(args); n > 0 && strings.EqualFold(args[n-1], "GMT") {
+		args = args[:n-1]
+		t = t.UTC()
+	}
+	return t, args
+}
+
+var weekdays = map[string]int{"SUN": 0, "MON": 1, "TUE": 2, "WED": 3, "THU": 4, "FRI": 5, "SAT": 6}
+
+// weekdayRange(wd1 [, wd2] [, "GMT"]): true on wd1, or between wd1 and wd2
+// inclusive (wrapping, so "FRI","MON" covers the weekend).
+func weekdayRange(call otto.FunctionCall) otto.Value {
+	t, args := clock(call)
+	if len(args) == 0 {
+		return boolValue(false)
+	}
+	from, ok1 := weekdays[strings.ToUpper(args[0])]
+	to, ok2 := from, true
+	if len(args) > 1 {
+		to, ok2 = weekdays[strings.ToUpper(args[1])]
+	}
+	if !ok1 || !ok2 {
+		return boolValue(false)
+	}
+	d := int(t.Weekday())
+	if from <= to {
+		return boolValue(d >= from && d <= to)
+	}
+	return boolValue(d >= from || d <= to)
+}
+
+// timeRange(h) | (h1, h2) | (h1, m1, h2, m2) | (h1, m1, s1, h2, m2, s2), each with
+// an optional trailing "GMT". Ranges may wrap past midnight.
+func timeRange(call otto.FunctionCall) otto.Value {
+	t, args := clock(call)
+	n := make([]int, len(args))
+	for i, a := range args {
+		v, err := strconv.Atoi(a)
+		if err != nil {
+			return boolValue(false)
+		}
+		n[i] = v
+	}
+	cur := t.Hour()*3600 + t.Minute()*60 + t.Second()
+	var from, to int
+	switch len(n) {
+	case 1:
+		return boolValue(t.Hour() == n[0])
+	case 2:
+		from, to = n[0]*3600, n[1]*3600+3599
+	case 4:
+		from, to = n[0]*3600+n[1]*60, n[2]*3600+n[3]*60+59
+	case 6:
+		from, to = n[0]*3600+n[1]*60+n[2], n[3]*3600+n[4]*60+n[5]
+	default:
+		return boolValue(false)
+	}
+	if from <= to {
+		return boolValue(cur >= from && cur <= to)
+	}
+	return boolValue(cur >= from || cur <= to)
+}
+
+// dateRange is not implemented: its many argument forms are rarely used in proxy
+// routing. It returns true, so a rule that depends on it is applied rather than
+// silently skipped.
 func alwaysTrue(otto.FunctionCall) otto.Value { return boolValue(true) }
 
 // itoa is used by tests.

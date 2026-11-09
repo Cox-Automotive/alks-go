@@ -149,3 +149,41 @@ func TestConstructorsReturnOptionErrors(t *testing.T) {
 		t.Error("NewBearerTokenClient accepted invalid options")
 	}
 }
+
+// Sam's review: the test must fail if a response body is logged. A session
+// response carries fresh credentials, so check CreateSession for every
+// credential type.
+func TestNoSessionCredentialsInLogs(t *testing.T) {
+	buf := captureLog(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "loginRoles") {
+			fmt.Fprint(w, `{"statusMessage":"Success","loginRole":{"account":"012345678910/ALKSAdmin - awstest","role":"Admin","maxKeyDuration":2}}`)
+			return
+		}
+		fmt.Fprint(w, `{"statusMessage":"Success","requestId":"r1","accessKey":"RESP-AKID-SECRET","secretKey":"RESP-SK-SECRET","sessionToken":"RESP-TOKEN-SECRET","sessionDuration":1}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	clients := []*Client{}
+	if c, err := NewClient(srv.URL, "u", "p", "012345678910/ALKSAdmin - awstest", "Admin"); err == nil {
+		clients = append(clients, c)
+	}
+	if c, err := NewSTSClient(srv.URL, "a", "b", "c"); err == nil {
+		clients = append(clients, c)
+	}
+	if c, err := NewBearerTokenClient(srv.URL, "t", "012345678910/ALKSAdmin - awstest", "Admin"); err == nil {
+		clients = append(clients, c)
+	}
+	for _, c := range clients {
+		resp, err := c.CreateSession(1, false)
+		if err != nil || resp.AccessKey != "RESP-AKID-SECRET" {
+			t.Fatalf("CreateSession did not return the session: %+v %v", resp, err)
+		}
+	}
+	for _, secret := range []string{"RESP-AKID-SECRET", "RESP-SK-SECRET", "RESP-TOKEN-SECRET"} {
+		if strings.Contains(buf.String(), secret) {
+			t.Errorf("log contains %q", secret)
+		}
+	}
+}

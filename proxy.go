@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	cleanhttp "github.com/hashicorp/go-cleanhttp"
 	"golang.org/x/net/http/httpproxy"
@@ -52,20 +53,37 @@ func newHTTPClient(cfg resolvedConfig) *http.Client {
 	return &http.Client{Transport: t}
 }
 
-// proxySelector implements the auto mode. The OS settings are read lazily, at
-// most once, and decisions are cached per scheme, host and port.
+// Cache lifetimes. Successful decisions and OS settings are re-checked after
+// decisionTTL so that a long-running process picks up network changes (for
+// example joining Zscaler after starting). Decisions that followed a discovery
+// failure, and failed OS reads, are retried after failureTTL instead of being
+// kept for the life of the client.
+var (
+	decisionTTL = 5 * time.Minute
+	failureTTL  = 30 * time.Second
+	now         = time.Now
+)
+
+type cachedDecision struct {
+	d       proxyDecision
+	expires time.Time
+}
+
+// proxySelector implements the auto mode. The OS settings are read lazily and
+// re-read when they expire; decisions are cached per scheme, host and port.
 type proxySelector struct {
 	envFunc func(*url.URL) (*url.URL, error)
 	noProxy func(*url.URL) (*url.URL, error) // nil result = host exempt by NO_PROXY
 	src     osProxySource
 
-	osOnce sync.Once
-	osCfg  osProxyConfig
-	osErr  error
+	osMu      sync.Mutex
+	osCfg     osProxyConfig
+	osErr     error
+	osExpires time.Time
 
-	mu      sync.Mutex
-	cache   map[string]proxyDecision
-	logOnce sync.Once
+	mu     sync.Mutex
+	cache  map[string]cachedDecision
+	logged map[string]proxyDecision
 }
 
 func newProxySelector(env *httpproxy.Config, src osProxySource) *proxySelector {
@@ -78,37 +96,63 @@ func newProxySelector(env *httpproxy.Config, src osProxySource) *proxySelector {
 		envFunc: env.ProxyFunc(),
 		noProxy: probe.ProxyFunc(),
 		src:     src,
-		cache:   map[string]proxyDecision{},
+		cache:   map[string]cachedDecision{},
+		logged:  map[string]proxyDecision{},
 	}
 }
 
 func (s *proxySelector) proxy(req *http.Request) (*url.URL, error) {
-	d := s.decide(req.URL)
-	s.logOnce.Do(func() {
-		if d.fallback != "" {
-			debugf("proxy mode=auto source=%s proxy=%s (OS proxy discovery failed: %s)", d.source, redactURL(d.proxy), d.fallback)
-			return
-		}
-		debugf("proxy mode=auto source=%s proxy=%s", d.source, redactURL(d.proxy))
-	})
-	return d.proxy, nil
+	return s.decide(req.URL).proxy, nil
 }
 
 func (s *proxySelector) decide(u *url.URL) proxyDecision {
 	key := u.Scheme + "://" + u.Host
 	s.mu.Lock()
-	if d, ok := s.cache[key]; ok {
+	if c, ok := s.cache[key]; ok && now().Before(c.expires) {
 		s.mu.Unlock()
-		return d
+		return c.d
 	}
 	s.mu.Unlock()
 
 	d := s.compute(u)
 
+	ttl := decisionTTL
+	if d.fallback != "" {
+		ttl = failureTTL
+	}
 	s.mu.Lock()
-	s.cache[key] = d
+	s.cache[key] = cachedDecision{d: d, expires: now().Add(ttl)}
+	prev, seen := s.logged[key]
+	s.logged[key] = d
 	s.mu.Unlock()
+
+	// A discovery failure is logged every time it is (re)computed, at most once
+	// per failureTTL per host, at warning level: it means the OS proxy could not
+	// be used. A normal decision is logged at debug level when it is first made
+	// or when it changes.
+	switch {
+	case d.fallback != "":
+		warnf("OS proxy discovery failed for %s, connecting directly: %s", u.Host, d.fallback)
+	case !seen || prev.source != d.source || redactURL(prev.proxy) != redactURL(d.proxy):
+		debugf("proxy mode=auto host=%s source=%s proxy=%s", u.Host, d.source, redactURL(d.proxy))
+	}
 	return d
+}
+
+// osConfig returns the OS settings, re-reading them when they have expired.
+func (s *proxySelector) osConfig() (osProxyConfig, error) {
+	s.osMu.Lock()
+	defer s.osMu.Unlock()
+	if now().Before(s.osExpires) {
+		return s.osCfg, s.osErr
+	}
+	s.osCfg, s.osErr = s.src.config()
+	if s.osErr != nil {
+		s.osExpires = now().Add(failureTTL)
+	} else {
+		s.osExpires = now().Add(decisionTTL)
+	}
+	return s.osCfg, s.osErr
 }
 
 func (s *proxySelector) compute(u *url.URL) proxyDecision {
@@ -127,11 +171,10 @@ func (s *proxySelector) compute(u *url.URL) proxyDecision {
 	}
 
 	// 3. The OS configuration, read once.
-	s.osOnce.Do(func() { s.osCfg, s.osErr = s.src.config() })
-	if s.osErr != nil {
-		return proxyDecision{source: sourceDirect, fallback: s.osErr.Error()}
+	cfg, err := s.osConfig()
+	if err != nil {
+		return proxyDecision{source: sourceDirect, fallback: err.Error()}
 	}
-	cfg := s.osCfg
 
 	// 4. PAC (or Windows automatic detection): the first entry of the answer wins.
 	if cfg.hasPAC() {

@@ -15,23 +15,7 @@ type windowsOSProxy struct{}
 func platformOSProxySource() osProxySource { return windowsOSProxy{} }
 
 func (windowsOSProxy) config() (osProxyConfig, error) {
-	conf := ieproxy.GetConf()
-	cfg := osProxyConfig{}
-	if conf.Automatic.Active {
-		cfg.pacURL = conf.Automatic.PreConfiguredURL
-		cfg.autoDetect = conf.Automatic.PreConfiguredURL == ""
-	}
-	if conf.Static.Active {
-		p := conf.Static.Protocols["https"]
-		if p == "" {
-			p = conf.Static.Protocols[""]
-		}
-		cfg.staticHTTPS = strings.TrimSpace(p)
-		for _, e := range strings.FieldsFunc(conf.Static.NoProxy, func(r rune) bool { return r == ',' || r == ';' }) {
-			cfg.exceptions = append(cfg.exceptions, strings.TrimSpace(e))
-		}
-	}
-	return cfg, nil
+	return configFromIEProxy(ieproxy.GetConf()), nil
 }
 
 func (windowsOSProxy) pacProxyFor(_ osProxyConfig, u *url.URL) (string, error) {

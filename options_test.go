@@ -17,18 +17,21 @@ func TestBuildConfigDefaults(t *testing.T) {
 }
 
 func TestBuildConfigOptions(t *testing.T) {
-	hc := &http.Client{}
 	c, err := buildConfig([]ClientOption{
 		WithProxyMode(ProxyEnvironment),
 		WithProxyURL("http://user:secret@127.0.0.1:9000"),
 		WithUserAgent("my-tool/1.0"),
-		WithHTTPClient(hc),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.proxyMode != ProxyEnvironment || c.userAgent != "my-tool/1.0" || c.httpClient != hc {
+	if c.proxyMode != ProxyEnvironment || c.userAgent != "my-tool/1.0" {
 		t.Fatalf("options not applied: %+v", c)
+	}
+	hc := &http.Client{}
+	c2, err := buildConfig([]ClientOption{WithHTTPClient(hc), WithUserAgent("ua")})
+	if err != nil || c2.httpClient != hc {
+		t.Fatalf("WithHTTPClient not applied: %+v %v", c2, err)
 	}
 	if c.proxyURL == nil || c.proxyURL.Host != "127.0.0.1:9000" {
 		t.Fatalf("proxy URL not parsed: %v", c.proxyURL)
@@ -49,6 +52,8 @@ func TestBuildConfigErrors(t *testing.T) {
 		"non-http scheme":          {WithProxyURL("socks5://127.0.0.1:1080")},
 		"no host":                  {WithProxyURL("http://")},
 		"nil http client":          {WithHTTPClient(nil)},
+		"http client with mode":    {WithHTTPClient(&http.Client{}), WithProxyMode(ProxyNone)},
+		"http client with URL":     {WithHTTPClient(&http.Client{}), WithProxyURL("http://127.0.0.1:9000")},
 	}
 	for name, opts := range cases {
 		if _, err := buildConfig(opts); err == nil {
@@ -88,5 +93,23 @@ func TestUnparseableProxyURLErrorDoesNotLeakCredentials(t *testing.T) {
 				t.Errorf("%q: error leaks %q: %v", raw, secret, err)
 			}
 		}
+	}
+}
+
+// Sam's review: a value without "scheme://" parses as an opaque URL, and its
+// credentials must not be echoed.
+func TestSchemelessProxyURLDoesNotLeakCredentials(t *testing.T) {
+	for _, raw := range []string{"user:S3cretPw@proxy.corp:8080", "S3cretPw@proxy.corp:8080", "proxy.corp:8080"} {
+		_, err := buildConfig([]ClientOption{WithProxyURL(raw)})
+		if err == nil {
+			t.Errorf("%q: expected an error", raw)
+			continue
+		}
+		if strings.Contains(err.Error(), "S3cretPw") || strings.Contains(err.Error(), "user:") {
+			t.Errorf("%q: error leaks credentials: %v", raw, err)
+		}
+	}
+	if got := redactRawURL("user:S3cretPw@proxy.corp:8080"); strings.Contains(got, "S3cretPw") {
+		t.Errorf("redactRawURL leaks: %q", got)
 	}
 }

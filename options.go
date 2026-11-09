@@ -48,6 +48,7 @@ type ClientOption func(*clientConfig)
 
 type clientConfig struct {
 	proxyMode     ProxyMode
+	proxyModeSet  bool
 	proxyURLRaw   string
 	proxyURLSet   bool
 	userAgent     string
@@ -57,7 +58,10 @@ type clientConfig struct {
 
 // WithProxyMode sets the proxy mode. The default is ProxyAuto.
 func WithProxyMode(mode ProxyMode) ClientOption {
-	return func(c *clientConfig) { c.proxyMode = mode }
+	return func(c *clientConfig) {
+		c.proxyMode = mode
+		c.proxyModeSet = true
+	}
 }
 
 // WithProxyURL sends every ALKS request through the given proxy (an http or https
@@ -117,6 +121,9 @@ func buildConfig(opts []ClientOption) (resolvedConfig, error) {
 		if c.httpClient == nil {
 			return r, fmt.Errorf("alks: WithHTTPClient was given a nil *http.Client")
 		}
+		if c.proxyModeSet || c.proxyURLSet {
+			return r, fmt.Errorf("alks: WithHTTPClient cannot be combined with WithProxyMode or WithProxyURL; configure the proxy on the supplied *http.Client")
+		}
 		r.httpClient = c.httpClient
 	}
 
@@ -134,8 +141,10 @@ func buildConfig(opts []ClientOption) (resolvedConfig, error) {
 			}
 			return r, fmt.Errorf("alks: invalid proxy URL %q: %v", redactRawURL(c.proxyURLRaw), err)
 		}
-		if (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-			return r, fmt.Errorf("alks: proxy URL %q must be http:// or https:// with a host", redactRawURL(c.proxyURLRaw))
+		if (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.Opaque != "" {
+			// Do not echo the value: without "scheme://" (for example
+			// "user:pass@host:port") its credentials cannot be told apart.
+			return r, fmt.Errorf("alks: proxy URL must be http:// or https:// with a host")
 		}
 		r.proxyURL = u
 	}
