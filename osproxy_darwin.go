@@ -23,11 +23,8 @@ type darwinOSProxy struct {
 
 func platformOSProxySource() osProxySource { return &darwinOSProxy{pac: newPACFile()} }
 
-// newPACFile returns a PAC evaluator that re-fetches the script after
-// decisionTTL and logs through debugf.
-func newPACFile() *pac.File {
-	return &pac.File{TTL: decisionTTL, Now: func() time.Time { return now() }, Logf: debugf}
-}
+// newPACFile returns the PAC evaluator, with the settings in pacFileArgs.
+func newPACFile() *pac.File { return pac.NewFile(pacFileArgs()) }
 
 func (d *darwinOSProxy) config() (osProxyConfig, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), scutilTimeout)

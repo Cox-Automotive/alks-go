@@ -329,6 +329,8 @@ func TestPACTargetStripsHTTPSPathAndQuery(t *testing.T) {
 		"https://alks.example.test/rest/loginRoles/id/me?account=123": "https://alks.example.test/",
 		"https://alks.example.test:8443/x#frag":                       "https://alks.example.test:8443/",
 		"http://intranet/path?q=1":                                    "http://intranet/path?q=1",
+		"http://user:secret@intranet/path#frag":                       "http://intranet/path",
+		"http://user@intranet:8080/":                                  "http://intranet:8080/",
 	} {
 		u, err := url.Parse(in)
 		if err != nil {

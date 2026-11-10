@@ -8,12 +8,15 @@ PAC hardening (Rally F325998, from review of the Terraform provider's 2.9.0 pull
 
 SECURITY:
 
-* **The PAC script no longer sees the request path or query.** For https requests it is asked about `https://host[:port]/` only, as browsers do. This applies to the macOS evaluator and the Windows WinHTTP lookup. Decisions were already cached per scheme, host and port, so answers are unchanged.
-* **PAC evaluation is bounded in memory as well as time.**
-  * Heap growth during an evaluation is limited to 256 MiB.
+* **The PAC script no longer sees the request path or query.** For https requests it is asked about `https://host[:port]/` only, as browsers do. For every scheme, user information (`user:password@`) and the fragment are removed. This applies to the macOS evaluator and the Windows WinHTTP lookup. Decisions were already cached per scheme, host and port, so answers are unchanged.
+* **PAC evaluation is checked for memory growth as well as time.**
+  * The heap is sampled every 20 ms while a script runs. If it has grown by more than 256 MiB, the script is stopped at its next statement.
+  * **Limit:** one call into a native builtin (for example a huge `Array.join`) cannot be interrupted, and can allocate well past the limit before it returns. The evaluation is then abandoned, and the caps below bound how often that can happen, not how many bytes one call allocates.
   * At most four abandoned evaluations (stopped by a limit but still inside a builtin) can be outstanding. Beyond that, new evaluations are refused until they finish. Healthy evaluations running at the same time never count.
-  * After a timeout, the PAC file is not evaluated again for 15 minutes, so a broken or hostile script cannot leave a new goroutine behind every 30 seconds.
-  * Only a timeout causes the backoff. A memory stop, or a refusal because of other abandoned evaluations, is retried after the usual 30 seconds. The heap is measured for the whole process, so unrelated allocation must not cause a long backoff.
+* **Backoff after a stall, escalating.**
+  * After a timeout, or a stop that left a goroutine behind, the PAC file is not evaluated again for 30 seconds, the same as the existing retry interval.
+  * Each consecutive stall doubles that (1, 2, 4 and 8 minutes), up to 15 minutes, so a broken or hostile script cannot leave a new goroutine behind every 30 seconds. A successful evaluation resets it.
+  * A memory stop at which the script did stop is not backed off, and neither is a refusal because of other abandoned evaluations; both are retried after the usual 30 seconds. The heap is measured for the whole process, so unrelated allocation must not cause a long backoff.
 * **PAC files over 512 KiB are rejected,** not truncated. Previously the limit was 2 MiB and a longer file was cut off.
 * **The JavaScript interpreter (otto) is linked only on macOS,** the only platform that evaluates PAC files in Go. Windows, Linux and FreeBSD builds no longer include it.
 

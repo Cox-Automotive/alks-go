@@ -13,7 +13,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/Cox-Automotive/alks-go/internal/pac"
 	cleanhttp "github.com/hashicorp/go-cleanhttp"
@@ -27,11 +26,9 @@ type pacSource struct {
 	pf     *pac.File
 }
 
-// testPACFile is the evaluator the macOS source builds (newPACFile), without the
-// darwin build tag.
-func testPACFile() *pac.File {
-	return &pac.File{TTL: decisionTTL, Now: func() time.Time { return now() }, Logf: debugf}
-}
+// testPACFile builds the evaluator exactly as the macOS source's newPACFile does
+// (same pacFileArgs), without the darwin build tag.
+func testPACFile() *pac.File { return pac.NewFile(pacFileArgs()) }
 
 func (p *pacSource) config() (osProxyConfig, error) { return osProxyConfig{pacURL: p.pacURL}, nil }
 

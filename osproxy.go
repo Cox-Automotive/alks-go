@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mattn/go-ieproxy"
 	"golang.org/x/net/http/httpproxy"
@@ -35,13 +36,23 @@ type osProxySource interface {
 // pacTarget is the URL a PAC script (or WinHTTP's PAC evaluation) is asked about.
 // For https it is reduced to scheme://host[:port]/, as browsers do, so the script,
 // which may arrive over plain HTTP and can leak what it sees through DNS lookups,
-// never sees the request path or query. Decisions are cached per scheme, host and
-// port, so the path never affected the answer.
+// never sees the request path or query. For every scheme, user information and
+// the fragment are removed. Decisions are cached per scheme, host and port, so
+// none of this changes the answer.
 func pacTarget(u *url.URL) *url.URL {
 	if u.Scheme == "https" {
 		return &url.URL{Scheme: u.Scheme, Host: u.Host, Path: "/"}
 	}
-	return u
+	c := *u
+	c.User, c.Fragment, c.RawFragment = nil, "", ""
+	return &c
+}
+
+// pacFileArgs are the settings for the PAC evaluator, shared by the macOS source
+// (newPACFile, darwin only) and the tests, which run on every platform. This file
+// does not import internal/pac, so other platforms still do not link otto.
+func pacFileArgs() (time.Duration, func() time.Time, func(string, ...interface{})) {
+	return decisionTTL, func() time.Time { return now() }, debugf
 }
 
 // newOSProxySource returns the source for the current platform. Tests replace it.

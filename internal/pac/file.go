@@ -18,14 +18,20 @@ const (
 	// MaxSize is the largest PAC file accepted. Real PAC files are a few KB;
 	// anything larger is rejected rather than truncated.
 	MaxSize = 512 << 10 // 512 KiB
-	// BackoffAfterAbort is how long a PAC URL is left alone after an evaluation
-	// was aborted (timeout or memory limit), so a hostile or broken script is not
-	// re-run, and another goroutine abandoned, every few seconds.
+	// FirstBackoff is how long a PAC URL is left alone after its first timed-out
+	// or abandoned evaluation. It matches the proxy selector's failure TTL, so one
+	// slow evaluation (for example slow DNS on VPN) costs no more than before.
+	FirstBackoff = 30 * time.Second
+	// BackoffAfterAbort caps the backoff, which doubles with each consecutive
+	// timed-out or abandoned evaluation of the same PAC URL (30s, 1m, 2m ... 15m),
+	// so a hostile or broken script is not re-run, and another goroutine
+	// abandoned, every few seconds. A successful evaluation resets it.
 	BackoffAfterAbort = 15 * time.Minute
 )
 
-// ErrBackoff is returned while a PAC URL is in backoff after an aborted evaluation.
-var ErrBackoff = errors.New("pac: evaluation recently aborted for this PAC file; not retrying yet")
+// ErrBackoff is returned while a PAC URL is in backoff after a timed-out or
+// abandoned evaluation.
+var ErrBackoff = errors.New("pac: evaluation recently timed out or was abandoned for this PAC file; not retrying yet")
 
 // File fetches a PAC script once per URL, caches it, and evaluates it. It is
 // safe for concurrent use.
@@ -42,6 +48,13 @@ type File struct {
 	mu      sync.Mutex
 	scripts map[string]cachedScript
 	backoff map[string]time.Time
+	strikes map[string]int // consecutive timed-out or abandoned evaluations
+}
+
+// NewFile returns a File that reuses a fetched script for ttl, reads the time from
+// now and logs through logf.
+func NewFile(ttl time.Duration, now func() time.Time, logf func(string, ...interface{})) *File {
+	return &File{TTL: ttl, Now: now, Logf: logf}
 }
 
 type cachedScript struct {
@@ -53,7 +66,7 @@ type cachedScript struct {
 // "host:port", or "" for a direct connection.
 func (f *File) ProxyFor(pacURL string, u *url.URL) (string, error) {
 	if until, ok := f.inBackoff(pacURL); ok {
-		f.logf("PAC file evaluation is in backoff until %s after an aborted run", until.Format(time.RFC3339))
+		f.logf("PAC file evaluation is in backoff until %s after a timed-out or abandoned run", until.Format(time.RFC3339))
 		return "", ErrBackoff
 	}
 	script, err := f.script(pacURL)
@@ -66,6 +79,7 @@ func (f *File) ProxyFor(pacURL string, u *url.URL) (string, error) {
 		f.noteAbort(pacURL, err)
 		return "", err
 	}
+	f.clearStrikes(pacURL)
 	hostPort, ok := FirstEntry(answer)
 	if !ok {
 		f.logf("PAC answer %q for %s: first entry is not a PROXY entry, so connecting directly (only the first entry is used)", Redact(answer), u.Host)
@@ -107,24 +121,45 @@ func (f *File) inBackoff(pacURL string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-// noteAbort puts pacURL into backoff after a timeout: this script stalled, and
-// re-running it can leave another goroutine behind. Nothing else backs off:
+// noteAbort puts pacURL into backoff after a timeout, or after any stop that left
+// a goroutine behind (ErrAbandoned, for example a memory stop inside a builtin
+// that ignores the interrupt). The backoff starts at FirstBackoff and doubles with
+// each consecutive strike, up to BackoffAfterAbort. Nothing else backs off:
 //   - ErrBusy is about other, abandoned evaluations, not this script;
-//   - a memory stop can be a false positive, because the heap is measured for
-//     the whole process. A false stop should cost one failure TTL, not
-//     BackoffAfterAbort, and a real memory bomb is stopped again within the
-//     limit on every retry.
+//   - a memory stop at which the VM did stop can be a false positive, because the
+//     heap is measured for the whole process, so it costs one failure TTL.
 func (f *File) noteAbort(pacURL string, err error) {
-	if !errors.Is(err, ErrTimeout) {
+	if !errors.Is(err, ErrTimeout) && !errors.Is(err, ErrAbandoned) {
 		return
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.backoff == nil {
 		f.backoff = map[string]time.Time{}
+		f.strikes = map[string]int{}
 	}
-	f.backoff[pacURL] = f.now().Add(BackoffAfterAbort)
+	f.strikes[pacURL]++
+	f.backoff[pacURL] = f.now().Add(backoffFor(f.strikes[pacURL]))
 	delete(f.scripts, pacURL)
+}
+
+// backoffFor is FirstBackoff doubled for each strike after the first, capped at
+// BackoffAfterAbort.
+func backoffFor(strikes int) time.Duration {
+	d := FirstBackoff
+	for i := 1; i < strikes && d < BackoffAfterAbort; i++ {
+		d *= 2
+	}
+	if d > BackoffAfterAbort {
+		d = BackoffAfterAbort
+	}
+	return d
+}
+
+func (f *File) clearStrikes(pacURL string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.strikes, pacURL)
 }
 
 func (f *File) budget() time.Duration {

@@ -37,6 +37,11 @@ var ErrTimeout = errors.New("pac: evaluation timed out")
 // evaluation.
 var ErrMemory = errors.New("pac: evaluation stopped: memory limit exceeded")
 
+// ErrAbandoned is wrapped into ErrTimeout or ErrMemory when the evaluation did
+// not stop at the interrupt within stopGrace (a native builtin is still running),
+// so its goroutine was left behind.
+var ErrAbandoned = errors.New("pac: evaluation abandoned while still running")
+
 // ErrBusy is returned when maxAbandoned evaluations were abandoned (after a
 // timeout or memory stop) and are still running, so no further goroutine is
 // started. Healthy evaluations running at the same time never count.
@@ -51,6 +56,10 @@ const (
 	memoryLimit = 256 << 20 // 256 MiB
 	// memoryCheckEvery is how often the heap is sampled during an evaluation.
 	memoryCheckEvery = 20 * time.Millisecond
+	// stopGrace is how long run waits, after asking the VM to stop, to see whether
+	// it stopped (it checks the interrupt between statements) before treating the
+	// evaluation as abandoned.
+	stopGrace = 100 * time.Millisecond
 	// maxAbandoned bounds evaluations that were abandoned but have not returned,
 	// so a builtin that ignores the interrupt cannot pile up goroutines.
 	maxAbandoned = 4
@@ -58,6 +67,10 @@ const (
 
 // abandoned counts abandoned evaluations whose goroutine has not returned.
 var abandoned atomic.Int32
+
+// vmHook, when set (tests only), is called on each new VM after the PAC helpers
+// are registered.
+var vmHook func(*otto.Otto)
 
 // States of one evaluation, so that exactly one side (the goroutine finishing,
 // or run giving up on it) decides whether it counts as abandoned.
@@ -125,6 +138,9 @@ func run(src string, budget time.Duration, after func(*otto.Otto) (string, error
 	if err := register(vm); err != nil {
 		return "", err
 	}
+	if vmHook != nil {
+		vmHook(vm)
+	}
 	vm.SetStackDepthLimit(stackDepthLimit)
 	vm.Interrupt = make(chan func(), 1)
 	var state atomic.Int32 // evalRunning
@@ -137,6 +153,12 @@ func run(src string, budget time.Duration, after func(*otto.Otto) (string, error
 			abandoned.Add(1)
 		}
 	}
+
+	// The heap baseline is read before the script starts, so growth from its very
+	// first statement is counted.
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	base := ms.HeapAlloc
 
 	done := make(chan result, 1)
 	go func() {
@@ -162,9 +184,21 @@ func run(src string, budget time.Duration, after func(*otto.Otto) (string, error
 		done <- result{answer: a, err: err}
 	}()
 
-	var ms runtime.MemStats
-	runtime.ReadMemStats(&ms)
-	base := ms.HeapAlloc
+	// giveUp asks the VM to stop and waits up to stopGrace for it. If it stopped,
+	// cause is returned as is; if not, its goroutine is left behind and the error
+	// also wraps ErrAbandoned.
+	giveUp := func(cause error) error {
+		stop(cause)
+		grace := time.NewTimer(stopGrace)
+		defer grace.Stop()
+		select {
+		case <-done:
+			return cause
+		case <-grace.C:
+			return fmt.Errorf("%w (%w)", cause, ErrAbandoned)
+		}
+	}
+
 	tick := time.NewTicker(memoryCheckEvery)
 	defer tick.Stop()
 	timer := time.NewTimer(budget)
@@ -176,20 +210,17 @@ func run(src string, budget time.Duration, after func(*otto.Otto) (string, error
 		case <-tick.C:
 			// The VM stops at its next statement. Growth inside one native
 			// builtin call is only seen here while it runs, and that call
-			// cannot be interrupted; the goroutine is then abandoned as for
-			// a timeout.
+			// cannot be interrupted; its goroutine is then abandoned.
 			runtime.ReadMemStats(&ms)
 			if ms.HeapAlloc > base && ms.HeapAlloc-base > memoryLimit {
-				stop(ErrMemory)
-				return "", ErrMemory
+				return "", giveUp(ErrMemory)
 			}
 		case <-timer.C:
 			// Ask the VM to stop at its next statement. A native builtin that is
 			// still running cannot be stopped; its goroutine is abandoned (and
 			// counted against maxAbandoned until it returns), and the caller
 			// treats the timeout as a discovery failure.
-			stop(ErrTimeout)
-			return "", ErrTimeout
+			return "", giveUp(ErrTimeout)
 		}
 	}
 }

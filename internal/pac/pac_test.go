@@ -4,8 +4,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/robertkrimen/otto"
 )
 
 // waitIdle makes the test wait, at cleanup, for any evaluation goroutine it
@@ -244,9 +248,10 @@ func TestMemoryGrowthIsStopped(t *testing.T) {
 }
 
 func TestTooManyAbandonedEvaluations(t *testing.T) {
-	prev := abandoned.Load()
-	abandoned.Store(maxAbandoned)
-	defer abandoned.Store(prev)
+	// Add, not Load/Store: a goroutine abandoned by an earlier test may still
+	// decrement the counter meanwhile.
+	abandoned.Add(maxAbandoned)
+	defer abandoned.Add(-maxAbandoned)
 	if _, err := Compile("function FindProxyForURL(u, h) { return 'DIRECT'; }", time.Second); !errors.Is(err, ErrBusy) {
 		t.Fatalf("got %v, want ErrBusy", err)
 	}
@@ -292,5 +297,88 @@ func TestAbandonedCountReturnsToZero(t *testing.T) {
 	}
 	if a := abandoned.Load(); a != 0 {
 		t.Fatalf("abandoned = %d after the interrupted loop stopped, want 0", a)
+	}
+}
+
+// blockingHelpers registers test-only builtins that ignore the interrupt: block()
+// waits for release; hog() allocates about 300 MiB, then waits for release. They
+// stand in for a native builtin that cannot be stopped mid-call.
+func blockingHelpers(t *testing.T) (release func()) {
+	t.Helper()
+	ch := make(chan struct{})
+	var keep [][]byte
+	vmHook = func(vm *otto.Otto) {
+		_ = vm.Set("block", func(otto.FunctionCall) otto.Value { <-ch; return otto.UndefinedValue() })
+		_ = vm.Set("hog", func(otto.FunctionCall) otto.Value {
+			b := make([]byte, 300<<20)
+			for i := 0; i < len(b); i += 4096 {
+				b[i] = 1
+			}
+			keep = append(keep, b)
+			<-ch
+			return otto.UndefinedValue()
+		})
+	}
+	var once sync.Once
+	release = func() { once.Do(func() { close(ch); vmHook = nil }) }
+	t.Cleanup(release)
+	// Collect earlier tests' garbage first. The memory guard measures heap growth
+	// for the whole process, and a collection during hog() would otherwise hide
+	// its allocation.
+	runtime.GC()
+	return release
+}
+
+// Sam's review (LOW): the time-budget abandon path, deterministically. The
+// counter is 1 while the builtin is blocked and 0 once it returns.
+func TestTimeoutInBlockedBuiltinIsAbandoned(t *testing.T) {
+	waitIdle(t)
+	release := blockingHelpers(t)
+	s, err := Compile("function FindProxyForURL(u, h) { block(); return 'DIRECT'; }", time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.FindProxyForURL("https://alks.example.test/", 50*time.Millisecond)
+	if !errors.Is(err, ErrTimeout) || !errors.Is(err, ErrAbandoned) {
+		t.Fatalf("got %v, want ErrTimeout wrapping ErrAbandoned", err)
+	}
+	if a := abandoned.Load(); a != 1 {
+		t.Fatalf("abandoned = %d while blocked, want 1", a)
+	}
+	release()
+	deadline := time.Now().Add(5 * time.Second)
+	for abandoned.Load() != 0 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if a := abandoned.Load(); a != 0 {
+		t.Fatalf("abandoned = %d after release, want 0", a)
+	}
+}
+
+// A loop stops at the interrupt, so a timeout there is not reported as abandoned.
+func TestTimeoutInLoopIsNotAbandoned(t *testing.T) {
+	waitIdle(t)
+	s, err := Compile("function FindProxyForURL(u, h) { while (true) {} }", time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.FindProxyForURL("https://alks.example.test/", 50*time.Millisecond)
+	if !errors.Is(err, ErrTimeout) || errors.Is(err, ErrAbandoned) {
+		t.Fatalf("got %v, want ErrTimeout without ErrAbandoned", err)
+	}
+}
+
+// Cody's review: a memory stop inside a builtin that ignores the interrupt is
+// reported as abandoned.
+func TestMemoryStopInBlockedBuiltinIsAbandoned(t *testing.T) {
+	waitIdle(t)
+	defer blockingHelpers(t)()
+	s, err := Compile("function FindProxyForURL(u, h) { hog(); return 'DIRECT'; }", time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.FindProxyForURL("https://alks.example.test/", 10*time.Second)
+	if !errors.Is(err, ErrMemory) || !errors.Is(err, ErrAbandoned) {
+		t.Fatalf("got %v, want ErrMemory wrapping ErrAbandoned", err)
 	}
 }
