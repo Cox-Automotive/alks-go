@@ -1,9 +1,11 @@
 // Package pac evaluates proxy auto-config (PAC) scripts in pure Go.
 //
 // A PAC file can be fetched over plain HTTP, so it is treated as untrusted input.
-// Before a script runs, Compile rejects bracket nesting deeper than maxNesting:
-// otto's recursive-descent parser overflows the Go stack, which no recover can
-// catch, at roughly 225,000 nested "(" or "[" (about 450 KB, under MaxSize).
+// Before a script runs, Compile rejects a script with more than maxOpeners "(",
+// "[" and "{" in total (strings and comments included): otto's recursive-descent
+// parser overflows the Go stack, which no recover can catch, at roughly 225,000
+// nested "(" or "[" (about 450 KB, under MaxSize). Nesting can never be deeper than
+// the number of openers, so nothing in the script can hide nesting from this cap.
 //
 // Every evaluation, including compiling the script's top level, is then bounded:
 //   - a time budget, enforced through otto's interrupt channel (checked between
@@ -13,8 +15,8 @@
 //     cannot be interrupted and can allocate far past the limit before it
 //     returns; the evaluation is then abandoned;
 //   - a JavaScript call-depth limit, so unbounded JavaScript recursion becomes a
-//     script error instead of a Go stack overflow (parser depth is the nesting
-//     check above);
+//     script error instead of a Go stack overflow (parser depth is the opener
+//     cap above);
 //   - one evaluation at a time, so the process-wide heap check of one script is
 //     not tripped by another (real evaluations take milliseconds);
 //   - a cap on abandoned evaluations still running, so their goroutines cannot
@@ -53,9 +55,10 @@ var ErrAbandoned = errors.New("pac: evaluation abandoned while still running")
 
 // ErrBusy is returned when maxAbandoned evaluations were abandoned (after a
 // timeout or memory stop) and are still running, so no further goroutine is
-// started, or when the evaluation slot stayed taken for a whole budget. Healthy
+// started, or when the queue for the evaluation slot stopped moving (or exceeded
+// maxSlotWait). Healthy
 // evaluations running at the same time never count against the cap.
-var ErrBusy = errors.New("pac: too many abandoned evaluations still running")
+var ErrBusy = errors.New("pac: too busy to evaluate the PAC script now")
 
 const (
 	// stackDepthLimit bounds JavaScript call depth. Real PAC files are flat; this
@@ -70,8 +73,12 @@ const (
 	// it stopped (it checks the interrupt between statements) before treating the
 	// evaluation as abandoned.
 	stopGrace = 100 * time.Millisecond
-	// maxNesting is the deepest "(" / "[" / "{" nesting Compile accepts. Real PAC
-	// files nest a few levels; the parser fails near 225,000.
+	// maxOpeners is the most "(", "[" and "{" a script may contain in total. It is
+	// the guard against the parser stack overflow (near 225,000 nested), with a
+	// wide margin; real PAC files are a few KB and stay far below it.
+	maxOpeners = 50000
+	// maxNesting is the deepest nesting Compile accepts, for a clear error on a
+	// deeply nested file. It is not the guard (see nestingDepth).
 	maxNesting = 1000
 	// maxAbandoned bounds evaluations that were abandoned but have not returned,
 	// so a builtin that ignores the interrupt cannot pile up goroutines.
@@ -85,6 +92,15 @@ var abandoned atomic.Int32
 // including when it gives up on an abandoned goroutine, so a stuck builtin does
 // not hold it.
 var evalSlot = make(chan struct{}, 1)
+
+// slotReleases counts releases of evalSlot. A waiter keeps waiting while the queue
+// is moving (some evaluation finishes within each window of two budgets), so a
+// burst of slow but healthy first lookups queues instead of being refused. It
+// gives up only if a whole window passes with no release, or after maxSlotWait.
+var slotReleases atomic.Uint64
+
+// maxSlotWait caps how long an evaluation waits for its turn.
+const maxSlotWait = time.Minute
 
 // vmHook, when set (tests only), is called on each new VM after the PAC helpers
 // are registered.
@@ -108,6 +124,9 @@ type Script struct {
 
 // Compile checks, within budget, that src runs and defines FindProxyForURL.
 func Compile(src string, budget time.Duration) (*Script, error) {
+	if n := openerCount(src); n > maxOpeners {
+		return nil, fmt.Errorf("pac: script has %d brackets (limit %d)", n, maxOpeners)
+	}
 	if d := nestingDepth(src); d > maxNesting {
 		return nil, fmt.Errorf("pac: script nests brackets %d deep (limit %d)", d, maxNesting)
 	}
@@ -124,10 +143,17 @@ func Compile(src string, budget time.Duration) (*Script, error) {
 	return &Script{src: src}, nil
 }
 
+// openerCount counts every "(", "[" and "{" in src, strings and comments
+// included. It is the real guard: it needs no parsing, so nothing can hide from it.
+func openerCount(src string) int {
+	return strings.Count(src, "(") + strings.Count(src, "[") + strings.Count(src, "{")
+}
+
 // nestingDepth returns the deepest nesting of "(", "[" and "{" in src, outside
-// string literals and comments. Regular-expression literals are not recognised, so
-// a bracket inside one counts too; that only matters for files far past anything
-// real, because the limit is generous.
+// string literals and comments, for a clearer error on deeply nested files. It does
+// not recognise regular-expression literals, so it can be fooled in either
+// direction (a regex containing a quote or "//" makes it skip code, so it
+// undercounts). It is therefore not a safety check; openerCount is.
 func nestingDepth(src string) int {
 	depth, deepest := 0, 0
 	for i := 0; i < len(src); i++ {
@@ -191,17 +217,16 @@ type result struct {
 // run executes src in a fresh VM and then calls after, all within budget and
 // within memoryLimit of heap growth.
 func run(src string, budget time.Duration, after func(*otto.Otto) (string, error)) (string, error) {
-	if abandoned.Load() >= maxAbandoned {
-		return "", ErrBusy
+	if n := abandoned.Load(); n >= maxAbandoned {
+		return "", fmt.Errorf("%w: %d abandoned evaluations still running", ErrBusy, n)
 	}
-	wait := time.NewTimer(budget)
-	select {
-	case evalSlot <- struct{}{}:
-		wait.Stop()
-	case <-wait.C:
-		return "", ErrBusy // another evaluation held the slot for a whole budget
+	if err := acquireSlot(budget); err != nil {
+		return "", err
 	}
-	defer func() { <-evalSlot }()
+	defer func() {
+		<-evalSlot
+		slotReleases.Add(1)
+	}()
 	vm := otto.New()
 	if err := register(vm); err != nil {
 		return "", err
@@ -289,6 +314,27 @@ func run(src string, budget time.Duration, after func(*otto.Otto) (string, error
 			// counted against maxAbandoned until it returns), and the caller
 			// treats the timeout as a discovery failure.
 			return "", giveUp(ErrTimeout)
+		}
+	}
+}
+
+// acquireSlot waits for evalSlot. An evaluation holds the slot for at most its
+// budget plus stopGrace, so a window of twice that with no release means the
+// queue is stuck; otherwise the wait continues, up to maxSlotWait in total.
+func acquireSlot(budget time.Duration) error {
+	window := 2 * (budget + stopGrace)
+	start := time.Now()
+	for {
+		seen := slotReleases.Load()
+		t := time.NewTimer(window)
+		select {
+		case evalSlot <- struct{}{}:
+			t.Stop()
+			return nil
+		case <-t.C:
+			if slotReleases.Load() == seen || time.Since(start) > maxSlotWait {
+				return fmt.Errorf("%w: waited %v for the evaluation slot", ErrBusy, time.Since(start).Round(time.Millisecond))
+			}
 		}
 	}
 }

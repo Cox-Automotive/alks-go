@@ -17,8 +17,15 @@ SECURITY:
   * After a timeout, or a stop that left a goroutine behind, the PAC file is not evaluated again for 30 seconds, the same as the existing retry interval.
   * Each consecutive stall doubles that (1, 2, 4 and 8 minutes), up to 15 minutes, so a broken or hostile script cannot leave a new goroutine behind every 30 seconds. A successful evaluation resets it.
   * A memory stop at which the script did stop is not backed off, and neither is a refusal because of other abandoned evaluations; both are retried after the usual 30 seconds. The heap is measured for the whole process, so unrelated allocation must not cause a long backoff.
-* **Deeply nested PAC files are rejected before parsing.** otto's parser overflows the Go stack, which kills the process and cannot be recovered, at roughly 225,000 nested `(` or `[`, which fits under the size limit. Nesting deeper than 1,000 levels is now an error. Real PAC files nest a few levels.
-* **One PAC evaluation at a time.** The memory check measures the whole process, so a memory-heavy script could stop a healthy evaluation running alongside it. Evaluations take milliseconds, so they now run one after another.
+* **PAC files that could crash the parser are rejected before parsing.** otto's parser overflows the Go stack, which kills the process and cannot be recovered, at roughly 225,000 nested `(` or `[`, which fits under the size limit.
+  * A script with more than 50,000 `(`, `[` and `{` in total is now an error. Strings and comments are counted too, because nesting can never be deeper than the number of brackets, so nothing in the file can hide it.
+  * A shallower check also reports nesting deeper than 1,000 levels with a clearer error.
+  * Real PAC files have a few hundred brackets at most. A 5,000-rule file has about 10,000.
+  * Of the other deep shapes tested (braces, `!` chains, else-if chains, ternaries, nested `if`s, chained assignment, labels), none crashed the parser at 200,000. Long member chains (`a.b.b…`) only make parsing slow, which the time budget stops.
+* **One PAC evaluation at a time, without refusing a busy queue.** The memory check measures the whole process, so a memory-heavy script could stop a healthy evaluation running alongside it, and evaluations now run one after another.
+  * A waiting evaluation keeps waiting while the queue moves, up to one minute. It gives up only if no evaluation finishes within two budgets.
+  * A burst of slow first lookups, such as PAC files that call `dnsResolve`, therefore queues instead of falling back to a direct connection.
+* **Concurrent first lookups for one host share one decision,** for example Terraform's parallel operations at start-up. A decision made after a discovery failure never replaces a still-valid successful decision.
 * **PAC fetches no longer block other lookups.**
   * The PAC file is downloaded outside the cache lock, one download per URL at a time; other lookups wait for it, or use the last good script.
   * A failed download or compile is remembered for 30 seconds, so many hosts do not each wait for an unreachable PAC server.

@@ -2,6 +2,7 @@ package pac
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -415,14 +416,14 @@ func TestDeepNestingIsRejected(t *testing.T) {
 	if len(deep) >= MaxSize {
 		t.Fatalf("test script is %d bytes, want it under MaxSize", len(deep))
 	}
-	if _, err := Compile(deep, time.Second); err == nil || !strings.Contains(err.Error(), "nests brackets") {
-		t.Fatalf("got %v, want the nesting error", err)
+	if _, err := Compile(deep, time.Second); err == nil || !strings.Contains(err.Error(), "brackets (limit") {
+		t.Fatalf("got %v, want the bracket-count error", err)
 	}
 	over := "function FindProxyForURL(u, h) { return " + strings.Repeat("[", maxNesting+1) + strings.Repeat("]", maxNesting+1) + "; }"
 	if _, err := Compile(over, time.Second); err == nil {
 		t.Fatal("nesting just over the limit was accepted")
 	}
-	// Brackets inside strings and comments do not count.
+	// nestingDepth (the clearer error, not the guard) skips strings and comments.
 	ok := "// ((((((((\n/* [[[[[[[[ */ function FindProxyForURL(u, h) { var s = \"((((\\\"((((\"; var t = '[[[['; return 'DIRECT'; }"
 	if d := nestingDepth(ok); d != 1 {
 		t.Fatalf("nestingDepth = %d, want 1 (the function body)", d)
@@ -465,5 +466,80 @@ func TestMemoryHeavyEvaluationDoesNotStopAHealthyOne(t *testing.T) {
 	}
 	if err := <-bombErr; !errors.Is(err, ErrMemory) {
 		t.Fatalf("memory-heavy evaluation: got %v, want ErrMemory", err)
+	}
+}
+
+// Cody's review: nothing in the script can hide nesting from the guard. Each
+// prefix fools nestingDepth (a regex literal read as a string or comment), or
+// string-embedded closers cancel real openers; the bracket count still rejects the
+// file before otto parses it. If this guard were missing, the test binary would
+// die with a stack overflow.
+func TestNestingCannotBeHidden(t *testing.T) {
+	nest := "return " + strings.Repeat("(", 210000) + "1" + strings.Repeat(")", 210000) + ";"
+	for name, prefix := range map[string]string{
+		`/"/`:   `var r = /"/; `,
+		`/'/`:   `var r = /'/; `,
+		`/\//`:  `var r = /\//; `,
+		`/\/*/`: `var r = /\/*/; `,
+	} {
+		src := "function FindProxyForURL(u, h) { " + prefix + nest + " }"
+		if d := nestingDepth(src); d > maxNesting {
+			t.Logf("%s: nestingDepth was not fooled (%d)", name, d)
+		}
+		if _, err := Compile(src, time.Second); err == nil || !strings.Contains(err.Error(), "brackets (limit") {
+			t.Fatalf("%s prefix: got %v, want the bracket-count error", name, err)
+		}
+	}
+	closers := "function FindProxyForURL(u, h) { return " + strings.Repeat(`( ")" `, 60000) + "1" + strings.Repeat(")", 60000) + "; }"
+	if _, err := Compile(closers, time.Second); err == nil || !strings.Contains(err.Error(), "brackets (limit") {
+		t.Fatalf("string-embedded closers: got %v, want the bracket-count error", err)
+	}
+}
+
+// A large but realistic PAC file (5,000 host rules, about 350 KB) stays well under
+// the cap.
+func TestLargeRealisticPACIsAccepted(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("function FindProxyForURL(url, host) {\n")
+	for i := 0; i < 5000; i++ {
+		fmt.Fprintf(&b, "  if (shExpMatch(host, \"*.host%d.example.com\")) { return \"DIRECT\"; }\n", i)
+	}
+	b.WriteString("  return \"PROXY 127.0.0.1:9000\";\n}\n")
+	src := b.String()
+	if len(src) > MaxSize {
+		t.Fatalf("fixture is %d bytes, over MaxSize", len(src))
+	}
+	if _, err := Compile(src, 5*time.Second); err != nil {
+		t.Fatalf("realistic large PAC (%d bytes, %d brackets) rejected: %v", len(src), openerCount(src), err)
+	}
+}
+
+// Cody's review: a burst of slow but healthy evaluations (each most of a budget,
+// like PACs making several dnsResolve calls) all succeed. Before the queue-aware
+// wait, the later ones gave up after one budget with ErrBusy.
+func TestSlowConcurrentEvaluationsAllSucceed(t *testing.T) {
+	waitIdle(t)
+	s, err := Compile("function FindProxyForURL(u, h) { for (var i = 0; i < 700000; i++) {} return 'PROXY 127.0.0.1:9000'; }", 10*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	if _, err := s.FindProxyForURL("https://alks.example.test/", 10*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	one := time.Since(start)
+	budget := one * 3 / 2 // each evaluation takes about two thirds of its budget
+	const n = 4
+	errs := make(chan error, n)
+	for i := 0; i < n; i++ {
+		go func() {
+			_, err := s.FindProxyForURL("https://alks.example.test/", budget)
+			errs <- err
+		}()
+	}
+	for i := 0; i < n; i++ {
+		if err := <-errs; err != nil {
+			t.Errorf("evaluation failed (one takes %v, budget %v): %v", one, budget, err)
+		}
 	}
 }

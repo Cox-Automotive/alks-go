@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -364,4 +365,61 @@ func (r *recordingPACSource) config() (osProxyConfig, error) {
 func (r *recordingPACSource) pacProxyFor(_ osProxyConfig, u *url.URL) (string, error) {
 	r.seen = u.String()
 	return "", nil
+}
+
+// slowCountingSource answers the PAC lookup after a delay and counts lookups.
+type slowCountingSource struct {
+	mu    sync.Mutex
+	calls int
+	delay time.Duration
+}
+
+func (s *slowCountingSource) config() (osProxyConfig, error) {
+	return osProxyConfig{pacURL: "http://pac.example.test/proxy.pac"}, nil
+}
+
+func (s *slowCountingSource) pacProxyFor(osProxyConfig, *url.URL) (string, error) {
+	s.mu.Lock()
+	s.calls++
+	s.mu.Unlock()
+	time.Sleep(s.delay)
+	return "127.0.0.1:9000", nil
+}
+
+// Cody's review: concurrent first lookups for one host share one decision.
+func TestConcurrentFirstLookupsShareOneDecision(t *testing.T) {
+	src := &slowCountingSource{delay: 100 * time.Millisecond}
+	sel := newProxySelector(&httpproxy.Config{}, src)
+	u, _ := url.Parse("https://alks.example.test/rest/x")
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if d := sel.decide(u); d.proxy == nil || d.proxy.Host != "127.0.0.1:9000" {
+				t.Errorf("decision %+v, want the PAC proxy", d)
+			}
+		}()
+	}
+	wg.Wait()
+	if src.calls != 1 {
+		t.Fatalf("PAC consulted %d times for one host, want 1", src.calls)
+	}
+}
+
+// Cody's review: a fallback decision never overwrites a fresher successful one.
+func TestFallbackDoesNotOverwriteGoodDecision(t *testing.T) {
+	sel := newProxySelector(&httpproxy.Config{}, &slowCountingSource{})
+	key := "https://alks.example.test"
+	good := proxyDecision{proxy: &url.URL{Scheme: "http", Host: "127.0.0.1:9000"}, source: sourcePAC}
+	sel.mu.Lock()
+	defer sel.mu.Unlock()
+	sel.store(key, good)
+	got := sel.store(key, proxyDecision{source: sourceDirect, fallback: "pac: too busy to evaluate the PAC script now"})
+	if got.fallback != "" || got.proxy == nil {
+		t.Fatalf("store returned %+v, want the good decision kept", got)
+	}
+	if c := sel.cache[key]; c.d.fallback != "" {
+		t.Fatalf("cache now holds the fallback %+v", c.d)
+	}
 }
