@@ -5,8 +5,10 @@ import (
 	"errors"
 	"io"
 	"log"
+	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -319,5 +321,105 @@ func TestConfigFromIEProxy(t *testing.T) {
 	all.Static.Protocols = map[string]string{"": "single.example:3128"}
 	if c := configFromIEProxy(all); c.staticHTTPS != "single.example:3128" {
 		t.Errorf("single proxy for all protocols: %+v", c)
+	}
+}
+
+// Cody's review sec-3: for https, the PAC sees only scheme://host[:port]/.
+func TestPACTargetStripsHTTPSPathAndQuery(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://alks.example.test/rest/loginRoles/id/me?account=123": "https://alks.example.test/",
+		"https://alks.example.test:8443/x#frag":                       "https://alks.example.test:8443/",
+		"http://intranet/path?q=1":                                    "http://intranet/path?q=1",
+		"http://user:secret@intranet/path#frag":                       "http://intranet/path",
+		"http://user@intranet:8080/":                                  "http://intranet:8080/",
+	} {
+		u, err := url.Parse(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := pacTarget(u).String(); got != want {
+			t.Errorf("pacTarget(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// The selector passes the stripped URL to the OS source.
+func TestSelectorPassesStrippedURLToPAC(t *testing.T) {
+	src := &recordingPACSource{}
+	sel := newProxySelector(&httpproxy.Config{}, src)
+	req, _ := http.NewRequest("GET", "https://alks.example.test/rest/getAccounts?secret=1", nil)
+	if _, err := sel.proxy(req); err != nil {
+		t.Fatal(err)
+	}
+	if src.seen != "https://alks.example.test/" {
+		t.Fatalf("PAC asked about %q, want only scheme and host", src.seen)
+	}
+}
+
+type recordingPACSource struct{ seen string }
+
+func (r *recordingPACSource) config() (osProxyConfig, error) {
+	return osProxyConfig{pacURL: "http://pac.example.test/proxy.pac"}, nil
+}
+
+func (r *recordingPACSource) pacProxyFor(_ osProxyConfig, u *url.URL) (string, error) {
+	r.seen = u.String()
+	return "", nil
+}
+
+// slowCountingSource answers the PAC lookup after a delay and counts lookups.
+type slowCountingSource struct {
+	mu    sync.Mutex
+	calls int
+	delay time.Duration
+}
+
+func (s *slowCountingSource) config() (osProxyConfig, error) {
+	return osProxyConfig{pacURL: "http://pac.example.test/proxy.pac"}, nil
+}
+
+func (s *slowCountingSource) pacProxyFor(osProxyConfig, *url.URL) (string, error) {
+	s.mu.Lock()
+	s.calls++
+	s.mu.Unlock()
+	time.Sleep(s.delay)
+	return "127.0.0.1:9000", nil
+}
+
+// Cody's review: concurrent first lookups for one host share one decision.
+func TestConcurrentFirstLookupsShareOneDecision(t *testing.T) {
+	src := &slowCountingSource{delay: 100 * time.Millisecond}
+	sel := newProxySelector(&httpproxy.Config{}, src)
+	u, _ := url.Parse("https://alks.example.test/rest/x")
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if d := sel.decide(u); d.proxy == nil || d.proxy.Host != "127.0.0.1:9000" {
+				t.Errorf("decision %+v, want the PAC proxy", d)
+			}
+		}()
+	}
+	wg.Wait()
+	if src.calls != 1 {
+		t.Fatalf("PAC consulted %d times for one host, want 1", src.calls)
+	}
+}
+
+// Cody's review: a fallback decision never overwrites a fresher successful one.
+func TestFallbackDoesNotOverwriteGoodDecision(t *testing.T) {
+	sel := newProxySelector(&httpproxy.Config{}, &slowCountingSource{})
+	key := "https://alks.example.test"
+	good := proxyDecision{proxy: &url.URL{Scheme: "http", Host: "127.0.0.1:9000"}, source: sourcePAC}
+	sel.mu.Lock()
+	defer sel.mu.Unlock()
+	sel.store(key, good)
+	got := sel.store(key, proxyDecision{source: sourceDirect, fallback: "pac: too busy to evaluate the PAC script now"})
+	if got.fallback != "" || got.proxy == nil {
+		t.Fatalf("store returned %+v, want the good decision kept", got)
+	}
+	if c := sel.cache[key]; c.d.fallback != "" {
+		t.Fatalf("cache now holds the fallback %+v", c.d)
 	}
 }

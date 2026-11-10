@@ -111,9 +111,16 @@ type proxySelector struct {
 	osErr     error
 	osExpires time.Time
 
-	mu     sync.Mutex
-	cache  map[string]cachedDecision
-	logged map[string]proxyDecision
+	mu       sync.Mutex
+	cache    map[string]cachedDecision
+	logged   map[string]proxyDecision
+	inflight map[string]*pendingDecision // one compute per key at a time
+}
+
+// pendingDecision is a decision being computed; done is closed when d is set.
+type pendingDecision struct {
+	done chan struct{}
+	d    proxyDecision
 }
 
 func newProxySelector(env *httpproxy.Config, src osProxySource) *proxySelector {
@@ -123,11 +130,12 @@ func newProxySelector(env *httpproxy.Config, src osProxySource) *proxySelector {
 		NoProxy:    env.NoProxy,
 	}
 	return &proxySelector{
-		envFunc: env.ProxyFunc(),
-		noProxy: probe.ProxyFunc(),
-		src:     src,
-		cache:   map[string]cachedDecision{},
-		logged:  map[string]proxyDecision{},
+		envFunc:  env.ProxyFunc(),
+		noProxy:  probe.ProxyFunc(),
+		src:      src,
+		cache:    map[string]cachedDecision{},
+		logged:   map[string]proxyDecision{},
+		inflight: map[string]*pendingDecision{},
 	}
 }
 
@@ -142,16 +150,24 @@ func (s *proxySelector) decide(u *url.URL) proxyDecision {
 		s.mu.Unlock()
 		return c.d
 	}
+	// Concurrent first lookups for one host (for example Terraform's parallel
+	// operations at start-up) share one computation.
+	if p, ok := s.inflight[key]; ok {
+		s.mu.Unlock()
+		<-p.done
+		return p.d
+	}
+	p := &pendingDecision{done: make(chan struct{})}
+	s.inflight[key] = p
 	s.mu.Unlock()
 
 	d := s.compute(u)
 
-	ttl := decisionTTL
-	if d.fallback != "" {
-		ttl = failureTTL
-	}
 	s.mu.Lock()
-	s.cache[key] = cachedDecision{d: d, expires: now().Add(ttl)}
+	d = s.store(key, d)
+	p.d = d
+	delete(s.inflight, key)
+	close(p.done)
 	prev, seen := s.logged[key]
 	s.logged[key] = d
 	s.mu.Unlock()
@@ -166,6 +182,21 @@ func (s *proxySelector) decide(u *url.URL) proxyDecision {
 	case !seen || prev.source != d.source || redactURL(prev.proxy) != redactURL(d.proxy):
 		debugf("proxy mode=auto host=%s source=%s proxy=%s", u.Host, d.source, redactURL(d.proxy))
 	}
+	return d
+}
+
+// store caches d for key and returns the decision to use. A fallback decision
+// (made after a discovery failure) never replaces a successful decision that is
+// still valid; the successful one is kept and returned. s.mu must be held.
+func (s *proxySelector) store(key string, d proxyDecision) proxyDecision {
+	if d.fallback != "" {
+		if c, ok := s.cache[key]; ok && c.d.fallback == "" && now().Before(c.expires) {
+			return c.d
+		}
+		s.cache[key] = cachedDecision{d: d, expires: now().Add(failureTTL)}
+		return d
+	}
+	s.cache[key] = cachedDecision{d: d, expires: now().Add(decisionTTL)}
 	return d
 }
 
@@ -208,7 +239,7 @@ func (s *proxySelector) compute(u *url.URL) proxyDecision {
 
 	// 4. PAC (or Windows automatic detection): the first entry of the answer wins.
 	if cfg.hasPAC() {
-		hostPort, err := s.src.pacProxyFor(cfg, u)
+		hostPort, err := s.src.pacProxyFor(cfg, pacTarget(u))
 		if err != nil {
 			return proxyDecision{source: sourceDirect, fallback: err.Error()}
 		}

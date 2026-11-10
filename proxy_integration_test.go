@@ -11,8 +11,10 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
+	"github.com/Cox-Automotive/alks-go/internal/pac"
 	cleanhttp "github.com/hashicorp/go-cleanhttp"
 	"golang.org/x/net/http/httpproxy"
 )
@@ -21,13 +23,17 @@ import (
 // code the macOS source uses, so this runs on every platform.
 type pacSource struct {
 	pacURL string
-	pf     *pacFile
+	pf     *pac.File
 }
+
+// testPACFile builds the evaluator exactly as the macOS source's newPACFile does
+// (same pacFileArgs), without the darwin build tag.
+func testPACFile() *pac.File { return pac.NewFile(pacFileArgs()) }
 
 func (p *pacSource) config() (osProxyConfig, error) { return osProxyConfig{pacURL: p.pacURL}, nil }
 
 func (p *pacSource) pacProxyFor(cfg osProxyConfig, u *url.URL) (string, error) {
-	return p.pf.proxyFor(cfg.pacURL, u)
+	return p.pf.ProxyFor(cfg.pacURL, u)
 }
 
 // recordingProxy is a forward proxy that records the requests it receives and
@@ -70,12 +76,20 @@ func closedPort(t *testing.T) string {
 }
 
 func servePAC(t *testing.T, script string) string {
+	u, _ := servePACCounted(t, script)
+	return u
+}
+
+// servePACCounted is servePAC that also counts how often the file is fetched.
+func servePACCounted(t *testing.T, script string) (string, *atomic.Int32) {
+	n := &atomic.Int32{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		n.Add(1)
 		w.Header().Set("Content-Type", "application/x-ns-proxy-autoconfig")
 		fmt.Fprint(w, script)
 	}))
 	t.Cleanup(srv.Close)
-	return srv.URL + "/proxy.pac"
+	return srv.URL + "/proxy.pac", n
 }
 
 func clientFor(env httpproxy.Config, src osProxySource) *http.Client {
@@ -90,12 +104,12 @@ const testALKS = "http://alks.example.test/rest/loginRoles/id/me"
 func TestIntegrationPACRoutesThroughProxy(t *testing.T) {
 	rp := newRecordingProxy(t)
 	dead := closedPort(t)
-	pacURL := servePAC(t, fmt.Sprintf(`function FindProxyForURL(url, host) {
+	pacURL, fetches := servePACCounted(t, fmt.Sprintf(`function FindProxyForURL(url, host) {
 		if (host == "alks.example.test") return "PROXY %s";
 		if (host == "dead.example.test") return "PROXY %s; DIRECT";
 		return "DIRECT";
 	}`, rp.hostPort(), dead))
-	src := &pacSource{pacURL: pacURL, pf: newPACFile()}
+	src := &pacSource{pacURL: pacURL, pf: testPACFile()}
 	c := clientFor(httpproxy.Config{}, src)
 
 	// Proxied by the PAC.
@@ -123,8 +137,8 @@ func TestIntegrationPACRoutesThroughProxy(t *testing.T) {
 		}
 		r.Body.Close()
 	}
-	if n := len(src.pf.scripts); n != 1 {
-		t.Fatalf("PAC fetched %d times", n)
+	if n := fetches.Load(); n != 1 {
+		t.Fatalf("PAC fetched %d times, want once", n)
 	}
 }
 
@@ -134,7 +148,7 @@ func TestIntegrationNoProxyAndFallback(t *testing.T) {
 
 	// NO_PROXY exempts the host from the PAC's proxy; the request then fails to
 	// resolve the reserved name, which proves it went direct.
-	c := clientFor(httpproxy.Config{NoProxy: "alks.example.test"}, &pacSource{pacURL: pacURL, pf: newPACFile()})
+	c := clientFor(httpproxy.Config{NoProxy: "alks.example.test"}, &pacSource{pacURL: pacURL, pf: testPACFile()})
 	if _, err := c.Get(testALKS); err == nil || rp.count() != 0 {
 		t.Fatalf("NO_PROXY not honoured (proxy saw %d)", rp.count())
 	}
@@ -143,7 +157,7 @@ func TestIntegrationNoProxyAndFallback(t *testing.T) {
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
 	defer log.SetOutput(io.Discard)
-	down := &pacSource{pacURL: "http://" + closedPort(t) + "/proxy.pac", pf: newPACFile()}
+	down := &pacSource{pacURL: "http://" + closedPort(t) + "/proxy.pac", pf: testPACFile()}
 	_, err := clientFor(httpproxy.Config{}, down).Get(testALKS)
 	if err != nil && strings.Contains(err.Error(), "proxyconnect") {
 		t.Fatalf("fell back to a proxy instead of direct: %v", err)
@@ -158,11 +172,32 @@ func TestIntegrationEnvironmentModeIgnoresPAC(t *testing.T) {
 	defer func() { newOSProxySource = restore }()
 	rp := newRecordingProxy(t)
 	pacURL := servePAC(t, fmt.Sprintf(`function FindProxyForURL(url, host) { return "PROXY %s"; }`, rp.hostPort()))
-	newOSProxySource = func() osProxySource { return &pacSource{pacURL: pacURL, pf: newPACFile()} }
+	newOSProxySource = func() osProxySource { return &pacSource{pacURL: pacURL, pf: testPACFile()} }
 
 	cfg, _ := buildConfig([]ClientOption{WithProxyMode(ProxyEnvironment)})
 	newHTTPClient(cfg).Get(testALKS)
 	if rp.count() != 0 {
 		t.Fatal("environment mode used the OS PAC")
+	}
+}
+
+// Sam's review: end to end, a real PAC script sees only scheme://host/ for an https
+// request. The PAC returns the proxy only for exactly "https://alks.example.test/",
+// so the request reaches the recording proxy (as a CONNECT) only if the path and
+// query were removed before the PAC was asked. The tunnel itself then fails, which
+// is fine: the recording proxy does not speak TLS.
+func TestIntegrationPACSeesOnlySchemeAndHostForHTTPS(t *testing.T) {
+	rp := newRecordingProxy(t)
+	pacURL := servePAC(t, fmt.Sprintf(`function FindProxyForURL(url, host) {
+		if (url == "https://alks.example.test/") return "PROXY %s";
+		return "DIRECT";
+	}`, rp.hostPort()))
+	c := clientFor(httpproxy.Config{}, &pacSource{pacURL: pacURL, pf: testPACFile()})
+	resp, err := c.Get("https://alks.example.test/rest/loginRoles/id/me?account=123#frag")
+	if err == nil {
+		resp.Body.Close()
+	}
+	if rp.count() != 1 {
+		t.Fatalf("the PAC did not choose the proxy (proxy saw %d requests); it was given more than scheme and host", rp.count())
 	}
 }

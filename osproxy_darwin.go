@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"os/exec"
 	"time"
+
+	"github.com/Cox-Automotive/alks-go/internal/pac"
 )
 
 const (
@@ -16,10 +18,13 @@ const (
 // darwinOSProxy reads the macOS system proxy with scutil and evaluates the PAC in
 // pure Go, so it works with CGO_ENABLED=0.
 type darwinOSProxy struct {
-	pac *pacFile
+	pac *pac.File
 }
 
 func platformOSProxySource() osProxySource { return &darwinOSProxy{pac: newPACFile()} }
+
+// newPACFile returns the PAC evaluator, with the settings in pacFileArgs.
+func newPACFile() *pac.File { return pac.NewFile(pacFileArgs()) }
 
 func (d *darwinOSProxy) config() (osProxyConfig, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), scutilTimeout)
@@ -32,5 +37,5 @@ func (d *darwinOSProxy) config() (osProxyConfig, error) {
 }
 
 func (d *darwinOSProxy) pacProxyFor(cfg osProxyConfig, u *url.URL) (string, error) {
-	return d.pac.proxyFor(cfg.pacURL, u)
+	return d.pac.ProxyFor(cfg.pacURL, u)
 }

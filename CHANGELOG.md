@@ -2,6 +2,38 @@
 
 Releases are tags on `ghe.coxautoinc.com/ETS-CloudAutomation/alks-go`, mirrored to `github.com/Cox-Automotive/alks-go` (the module path). Label a pull request `release/patch`, `release/minor`, `release/major` or `release/skip`; merging it tags the next version. Add an entry here in the same pull request.
 
+## 1.1.1
+
+PAC hardening (Rally F325998, from review of the Terraform provider's 2.9.0 pull request).
+
+SECURITY:
+
+* **The PAC script no longer sees the request path or query.** For https requests it is asked about `https://host[:port]/` only, as browsers do. For every scheme, user information (`user:password@`) and the fragment are removed. This applies to the macOS evaluator and the Windows WinHTTP lookup. Decisions were already cached per scheme, host and port, so answers are unchanged.
+* **PAC evaluation is checked for memory growth as well as time.**
+  * The heap is sampled every 20 ms while a script runs. If it has grown by more than 256 MiB, the script is stopped at its next statement.
+  * **Limit:** one call into a native builtin (for example a huge `Array.join`) cannot be interrupted, and can allocate well past the limit before it returns. The evaluation is then abandoned, and the caps below bound how often that can happen, not how many bytes one call allocates.
+  * At most four abandoned evaluations (stopped by a limit but still inside a builtin) can be outstanding. Beyond that, new evaluations are refused until they finish. Healthy evaluations running at the same time never count.
+* **Backoff after a stall, escalating.**
+  * After a timeout, or a stop that left a goroutine behind, the PAC file is not evaluated again for 30 seconds, the same as the existing retry interval.
+  * Each consecutive stall doubles that (1, 2, 4 and 8 minutes), up to 15 minutes, so a broken or hostile script cannot leave a new goroutine behind every 30 seconds. A successful evaluation resets it.
+  * A memory stop at which the script did stop is not backed off, and neither is a refusal because of other abandoned evaluations; both are retried after the usual 30 seconds. The heap is measured for the whole process, so unrelated allocation must not cause a long backoff.
+* **PAC files that could crash the parser are rejected before parsing.** otto's parser overflows the Go stack, which kills the process and cannot be recovered, at roughly 225,000 nested `(` or `[`, which fits under the size limit.
+  * A script with more than 50,000 `(`, `[` and `{` in total is now an error. Strings and comments are counted too, because nesting can never be deeper than the number of brackets, so nothing in the file can hide it.
+  * A shallower check also reports nesting deeper than 1,000 levels with a clearer error.
+  * Real PAC files have a few hundred brackets at most. A 5,000-rule file has about 10,000.
+  * Of the other deep shapes tested (braces, `!` chains, else-if chains, ternaries, nested `if`s, chained assignment, labels), none crashed the parser at 200,000. Long member chains (`a.b.b…`) only make parsing slow, which the time budget stops.
+* **One PAC evaluation at a time, without refusing a busy queue.** The memory check measures the whole process, so a memory-heavy script could stop a healthy evaluation running alongside it, and evaluations now run one after another.
+  * A waiting evaluation keeps waiting while the queue moves, up to one minute. It gives up only if no evaluation finishes within two budgets.
+  * A burst of slow first lookups, such as PAC files that call `dnsResolve`, therefore queues instead of falling back to a direct connection.
+* **Concurrent first lookups for one host share one decision,** for example Terraform's parallel operations at start-up. A decision made after a discovery failure never replaces a still-valid successful decision.
+* **PAC fetches no longer block other lookups.**
+  * The PAC file is downloaded outside the cache lock, one download per URL at a time; other lookups wait for it, or use the last good script.
+  * A failed download or compile is remembered for 30 seconds, so many hosts do not each wait for an unreachable PAC server.
+  * If a refresh fails, the last good script stays in use, so requests keep going through the proxy while the PAC server is down.
+  * Downloads no longer leave idle keep-alive connections behind.
+* **PAC files over 512 KiB are rejected,** not truncated. Previously the limit was 2 MiB and a longer file was cut off.
+* **The JavaScript interpreter (otto) is linked only on macOS,** the only platform that evaluates PAC files in Go. Windows, Linux and FreeBSD builds no longer include it.
+
 ## 1.1.0
 
 System-proxy awareness (Rally F325998).
