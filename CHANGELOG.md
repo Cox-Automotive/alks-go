@@ -17,6 +17,13 @@ SECURITY:
   * After a timeout, or a stop that left a goroutine behind, the PAC file is not evaluated again for 30 seconds, the same as the existing retry interval.
   * Each consecutive stall doubles that (1, 2, 4 and 8 minutes), up to 15 minutes, so a broken or hostile script cannot leave a new goroutine behind every 30 seconds. A successful evaluation resets it.
   * A memory stop at which the script did stop is not backed off, and neither is a refusal because of other abandoned evaluations; both are retried after the usual 30 seconds. The heap is measured for the whole process, so unrelated allocation must not cause a long backoff.
+* **Deeply nested PAC files are rejected before parsing.** otto's parser overflows the Go stack, which kills the process and cannot be recovered, at roughly 225,000 nested `(` or `[`, which fits under the size limit. Nesting deeper than 1,000 levels is now an error. Real PAC files nest a few levels.
+* **One PAC evaluation at a time.** The memory check measures the whole process, so a memory-heavy script could stop a healthy evaluation running alongside it. Evaluations take milliseconds, so they now run one after another.
+* **PAC fetches no longer block other lookups.**
+  * The PAC file is downloaded outside the cache lock, one download per URL at a time; other lookups wait for it, or use the last good script.
+  * A failed download or compile is remembered for 30 seconds, so many hosts do not each wait for an unreachable PAC server.
+  * If a refresh fails, the last good script stays in use, so requests keep going through the proxy while the PAC server is down.
+  * Downloads no longer leave idle keep-alive connections behind.
 * **PAC files over 512 KiB are rejected,** not truncated. Previously the limit was 2 MiB and a longer file was cut off.
 * **The JavaScript interpreter (otto) is linked only on macOS,** the only platform that evaluates PAC files in Go. Windows, Linux and FreeBSD builds no longer include it.
 

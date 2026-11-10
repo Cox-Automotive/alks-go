@@ -180,3 +180,24 @@ func TestIntegrationEnvironmentModeIgnoresPAC(t *testing.T) {
 		t.Fatal("environment mode used the OS PAC")
 	}
 }
+
+// Sam's review: end to end, a real PAC script sees only scheme://host/ for an https
+// request. The PAC returns the proxy only for exactly "https://alks.example.test/",
+// so the request reaches the recording proxy (as a CONNECT) only if the path and
+// query were removed before the PAC was asked. The tunnel itself then fails, which
+// is fine: the recording proxy does not speak TLS.
+func TestIntegrationPACSeesOnlySchemeAndHostForHTTPS(t *testing.T) {
+	rp := newRecordingProxy(t)
+	pacURL := servePAC(t, fmt.Sprintf(`function FindProxyForURL(url, host) {
+		if (url == "https://alks.example.test/") return "PROXY %s";
+		return "DIRECT";
+	}`, rp.hostPort()))
+	c := clientFor(httpproxy.Config{}, &pacSource{pacURL: pacURL, pf: testPACFile()})
+	resp, err := c.Get("https://alks.example.test/rest/loginRoles/id/me?account=123#frag")
+	if err == nil {
+		resp.Body.Close()
+	}
+	if rp.count() != 1 {
+		t.Fatalf("the PAC did not choose the proxy (proxy saw %d requests); it was given more than scheme and host", rp.count())
+	}
+}

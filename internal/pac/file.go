@@ -13,6 +13,10 @@ import (
 const (
 	// FetchLimit bounds the PAC download.
 	FetchLimit = 5 * time.Second
+	// FetchFailureTTL is how long a failed fetch or compile is remembered, so
+	// lookups for many hosts do not each wait for an unreachable PAC server. The
+	// last good script, if any, keeps being used meanwhile.
+	FetchFailureTTL = 30 * time.Second
 	// EvalBudget bounds each compile and each FindProxyForURL call.
 	EvalBudget = 2 * time.Second
 	// MaxSize is the largest PAC file accepted. Real PAC files are a few KB;
@@ -44,9 +48,14 @@ type File struct {
 	Now func() time.Time
 	// Logf receives debug lines; nil discards them.
 	Logf func(format string, args ...interface{})
+	// FetchTimeout bounds each download; zero means FetchLimit.
+	FetchTimeout time.Duration
 
+	// mu guards the maps below. It is never held during a fetch, compile or
+	// evaluation, so a slow PAC server cannot block lookups for other URLs or
+	// the backoff check.
 	mu      sync.Mutex
-	scripts map[string]cachedScript
+	scripts map[string]*cachedScript
 	backoff map[string]time.Time
 	strikes map[string]int // consecutive timed-out or abandoned evaluations
 }
@@ -57,9 +66,13 @@ func NewFile(ttl time.Duration, now func() time.Time, logf func(string, ...inter
 	return &File{TTL: ttl, Now: now, Logf: logf}
 }
 
+// cachedScript is the state for one PAC URL.
 type cachedScript struct {
-	s       *Script
-	expires time.Time
+	s        *Script       // last good script (may be past expires: stale)
+	expires  time.Time     // when s should be re-fetched
+	inflight chan struct{} // non-nil while a fetch is running; closed when it ends
+	err      error         // last fetch or compile error
+	errUntil time.Time     // err is reused until then (FetchFailureTTL)
 }
 
 // ProxyFor returns the proxy named by the first entry of the PAC answer for u, as
@@ -87,27 +100,90 @@ func (f *File) ProxyFor(pacURL string, u *url.URL) (string, error) {
 	return hostPort, nil
 }
 
+// script returns the script for pacURL. One fetch runs at a time per URL, outside
+// the lock; other callers wait for it, or get the last good script if there is one.
+// A failed fetch or compile is remembered for FetchFailureTTL, during which the
+// last good script (if any) is used and nothing is fetched.
 func (f *File) script(pacURL string) (*Script, error) {
 	f.mu.Lock()
-	defer f.mu.Unlock()
-	if c, ok := f.scripts[pacURL]; ok && f.now().Before(c.expires) {
-		return c.s, nil
-	}
-	src, err := Fetch(pacURL)
-	if err != nil {
-		return nil, err
-	}
-	s, err := Compile(src, f.budget())
-	if err != nil {
-		return nil, err
-	}
-	// Re-fetch after TTL so a changed PAC file is picked up. A failed fetch or
-	// compile is not cached.
 	if f.scripts == nil {
-		f.scripts = map[string]cachedScript{}
+		f.scripts = map[string]*cachedScript{}
 	}
-	f.scripts[pacURL] = cachedScript{s: s, expires: f.now().Add(f.TTL)}
+	c := f.scripts[pacURL]
+	if c == nil {
+		c = &cachedScript{}
+		f.scripts[pacURL] = c
+	}
+	now := f.now()
+	switch {
+	case c.s != nil && now.Before(c.expires):
+		s := c.s
+		f.mu.Unlock()
+		return s, nil
+	case c.err != nil && now.Before(c.errUntil):
+		s, err := c.s, c.err
+		f.mu.Unlock()
+		if s != nil {
+			f.logf("PAC file refresh failed recently (%v); using the last good script", err)
+			return s, nil
+		}
+		return nil, err
+	case c.inflight != nil:
+		if c.s != nil {
+			s := c.s
+			f.mu.Unlock()
+			return s, nil // a refresh is running: use the last good script
+		}
+		ch := c.inflight
+		f.mu.Unlock()
+		<-ch
+		f.mu.Lock()
+		s, err := c.s, c.err
+		f.mu.Unlock()
+		if s == nil && err == nil {
+			err = errors.New("pac: PAC file was dropped while fetching")
+		}
+		if s != nil {
+			return s, nil
+		}
+		return nil, err
+	}
+	ch := make(chan struct{})
+	c.inflight = ch
+	f.mu.Unlock()
+
+	src, err := fetch(pacURL, f.fetchTimeout())
+	var s *Script
+	if err == nil {
+		s, err = Compile(src, f.budget())
+	}
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	defer close(ch)
+	c.inflight = nil
+	if err != nil {
+		if isAbort(err) {
+			// A stopped compile is for the backoff rules (ProxyFor's noteAbort),
+			// not the fetch-failure cache.
+			return nil, err
+		}
+		c.err, c.errUntil = err, f.now().Add(FetchFailureTTL)
+		if c.s != nil {
+			f.logf("PAC file refresh failed (%v); using the last good script", err)
+			return c.s, nil
+		}
+		return nil, err
+	}
+	// Re-fetch after TTL so a changed PAC file is picked up.
+	c.s, c.expires, c.err = s, f.now().Add(f.TTL), nil
 	return s, nil
+}
+
+// isAbort reports whether err stopped an evaluation (rather than a fetch or a
+// script error): those are handled by the backoff, not the failure cache.
+func isAbort(err error) bool {
+	return errors.Is(err, ErrTimeout) || errors.Is(err, ErrMemory) || errors.Is(err, ErrBusy)
 }
 
 func (f *File) inBackoff(pacURL string) (time.Time, bool) {
@@ -140,7 +216,9 @@ func (f *File) noteAbort(pacURL string, err error) {
 	}
 	f.strikes[pacURL]++
 	f.backoff[pacURL] = f.now().Add(backoffFor(f.strikes[pacURL]))
-	delete(f.scripts, pacURL)
+	if c := f.scripts[pacURL]; c != nil {
+		c.s, c.err = nil, nil // drop the script; it is fetched again after the backoff
+	}
 }
 
 // backoffFor is FirstBackoff doubled for each strike after the first, capped at
@@ -160,6 +238,13 @@ func (f *File) clearStrikes(pacURL string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	delete(f.strikes, pacURL)
+}
+
+func (f *File) fetchTimeout() time.Duration {
+	if f.FetchTimeout > 0 {
+		return f.FetchTimeout
+	}
+	return FetchLimit
 }
 
 func (f *File) budget() time.Duration {
@@ -182,10 +267,14 @@ func (f *File) logf(format string, args ...interface{}) {
 	}
 }
 
-// Fetch downloads a PAC file directly, never through a proxy. A file larger
-// than MaxSize is an error.
-func Fetch(pacURL string) (string, error) {
-	c := &http.Client{Timeout: FetchLimit, Transport: &http.Transport{Proxy: nil}}
+// Fetch downloads a PAC file directly, never through a proxy, within FetchLimit.
+// A file larger than MaxSize is an error.
+func Fetch(pacURL string) (string, error) { return fetch(pacURL, FetchLimit) }
+
+func fetch(pacURL string, timeout time.Duration) (string, error) {
+	// One request per client, so keep-alives would only leave idle connections
+	// (and their goroutines) behind.
+	c := &http.Client{Timeout: timeout, Transport: &http.Transport{Proxy: nil, DisableKeepAlives: true}}
 	resp, err := c.Get(pacURL)
 	if err != nil {
 		return "", fmt.Errorf("fetching PAC file: %v", err)

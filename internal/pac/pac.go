@@ -1,17 +1,26 @@
 // Package pac evaluates proxy auto-config (PAC) scripts in pure Go.
 //
-// Every evaluation, including compiling the script's top level, is bounded:
+// A PAC file can be fetched over plain HTTP, so it is treated as untrusted input.
+// Before a script runs, Compile rejects bracket nesting deeper than maxNesting:
+// otto's recursive-descent parser overflows the Go stack, which no recover can
+// catch, at roughly 225,000 nested "(" or "[" (about 450 KB, under MaxSize).
+//
+// Every evaluation, including compiling the script's top level, is then bounded:
 //   - a time budget, enforced through otto's interrupt channel (checked between
 //     statements) and by abandoning the evaluation if it has not finished (a
 //     native builtin can ignore the interrupt);
-//   - a heap-growth limit, sampled while the script runs;
-//   - a JavaScript stack-depth limit, so unbounded recursion becomes a script
-//     error instead of a Go stack overflow that would kill the process;
+//   - a heap-growth check, sampled while the script runs. One native builtin call
+//     cannot be interrupted and can allocate far past the limit before it
+//     returns; the evaluation is then abandoned;
+//   - a JavaScript call-depth limit, so unbounded JavaScript recursion becomes a
+//     script error instead of a Go stack overflow (parser depth is the nesting
+//     check above);
+//   - one evaluation at a time, so the process-wide heap check of one script is
+//     not tripped by another (real evaluations take milliseconds);
 //   - a cap on abandoned evaluations still running, so their goroutines cannot
 //     pile up (evaluations that finish normally never count).
 //
-// File adds a size limit on the script and a backoff after an aborted run. A
-// PAC file can be fetched over plain HTTP, so it is treated as untrusted input.
+// File adds a size limit, a fetch-failure cache and a backoff after a stalled run.
 //
 // Only the macOS proxy source imports this package, so builds for other
 // platforms do not include the JavaScript interpreter.
@@ -44,7 +53,8 @@ var ErrAbandoned = errors.New("pac: evaluation abandoned while still running")
 
 // ErrBusy is returned when maxAbandoned evaluations were abandoned (after a
 // timeout or memory stop) and are still running, so no further goroutine is
-// started. Healthy evaluations running at the same time never count.
+// started, or when the evaluation slot stayed taken for a whole budget. Healthy
+// evaluations running at the same time never count against the cap.
 var ErrBusy = errors.New("pac: too many abandoned evaluations still running")
 
 const (
@@ -60,6 +70,9 @@ const (
 	// it stopped (it checks the interrupt between statements) before treating the
 	// evaluation as abandoned.
 	stopGrace = 100 * time.Millisecond
+	// maxNesting is the deepest "(" / "[" / "{" nesting Compile accepts. Real PAC
+	// files nest a few levels; the parser fails near 225,000.
+	maxNesting = 1000
 	// maxAbandoned bounds evaluations that were abandoned but have not returned,
 	// so a builtin that ignores the interrupt cannot pile up goroutines.
 	maxAbandoned = 4
@@ -67,6 +80,11 @@ const (
 
 // abandoned counts abandoned evaluations whose goroutine has not returned.
 var abandoned atomic.Int32
+
+// evalSlot lets one evaluation run at a time. It is released when run returns,
+// including when it gives up on an abandoned goroutine, so a stuck builtin does
+// not hold it.
+var evalSlot = make(chan struct{}, 1)
 
 // vmHook, when set (tests only), is called on each new VM after the PAC helpers
 // are registered.
@@ -90,6 +108,9 @@ type Script struct {
 
 // Compile checks, within budget, that src runs and defines FindProxyForURL.
 func Compile(src string, budget time.Duration) (*Script, error) {
+	if d := nestingDepth(src); d > maxNesting {
+		return nil, fmt.Errorf("pac: script nests brackets %d deep (limit %d)", d, maxNesting)
+	}
 	_, err := run(src, budget, func(vm *otto.Otto) (string, error) {
 		f, err := vm.Get("FindProxyForURL")
 		if err != nil || !f.IsFunction() {
@@ -101,6 +122,45 @@ func Compile(src string, budget time.Duration) (*Script, error) {
 		return nil, err
 	}
 	return &Script{src: src}, nil
+}
+
+// nestingDepth returns the deepest nesting of "(", "[" and "{" in src, outside
+// string literals and comments. Regular-expression literals are not recognised, so
+// a bracket inside one counts too; that only matters for files far past anything
+// real, because the limit is generous.
+func nestingDepth(src string) int {
+	depth, deepest := 0, 0
+	for i := 0; i < len(src); i++ {
+		switch c := src[i]; c {
+		case '"', '\'':
+			for i++; i < len(src) && src[i] != c && src[i] != '\n'; i++ {
+				if src[i] == '\\' {
+					i++
+				}
+			}
+		case '/':
+			if i+1 < len(src) && src[i+1] == '/' {
+				for i < len(src) && src[i] != '\n' {
+					i++
+				}
+			} else if i+1 < len(src) && src[i+1] == '*' {
+				end := strings.Index(src[i+2:], "*/")
+				if end < 0 {
+					return deepest
+				}
+				i += end + 3
+			}
+		case '(', '[', '{':
+			if depth++; depth > deepest {
+				deepest = depth
+			}
+		case ')', ']', '}':
+			if depth > 0 {
+				depth--
+			}
+		}
+	}
+	return deepest
 }
 
 // FindProxyForURL runs the script for rawURL and returns its raw answer, such as
@@ -134,6 +194,14 @@ func run(src string, budget time.Duration, after func(*otto.Otto) (string, error
 	if abandoned.Load() >= maxAbandoned {
 		return "", ErrBusy
 	}
+	wait := time.NewTimer(budget)
+	select {
+	case evalSlot <- struct{}{}:
+		wait.Stop()
+	case <-wait.C:
+		return "", ErrBusy // another evaluation held the slot for a whole budget
+	}
+	defer func() { <-evalSlot }()
 	vm := otto.New()
 	if err := register(vm); err != nil {
 		return "", err

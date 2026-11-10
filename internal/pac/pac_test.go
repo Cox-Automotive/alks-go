@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -300,27 +301,51 @@ func TestAbandonedCountReturnsToZero(t *testing.T) {
 	}
 }
 
-// blockingHelpers registers test-only builtins that ignore the interrupt: block()
-// waits for release; hog() allocates about 300 MiB, then waits for release. They
-// stand in for a native builtin that cannot be stopped mid-call.
+// blockingHelpers registers test-only builtins: block() waits for release; hog()
+// allocates about 300 MiB, then waits for release (both ignore the interrupt, as a
+// native builtin can); grow() allocates 16 MiB and returns at once, so a loop
+// calling it grows the heap but stops at the interrupt.
 func blockingHelpers(t *testing.T) (release func()) {
 	t.Helper()
 	ch := make(chan struct{})
-	var keep [][]byte
+	var (
+		mu   sync.Mutex
+		keep [][]byte
+	)
 	vmHook = func(vm *otto.Otto) {
 		_ = vm.Set("block", func(otto.FunctionCall) otto.Value { <-ch; return otto.UndefinedValue() })
+		_ = vm.Set("grow", func(otto.FunctionCall) otto.Value {
+			b := make([]byte, 16<<20)
+			for i := 0; i < len(b); i += 4096 {
+				b[i] = 1
+			}
+			mu.Lock()
+			keep = append(keep, b)
+			mu.Unlock()
+			return otto.UndefinedValue()
+		})
 		_ = vm.Set("hog", func(otto.FunctionCall) otto.Value {
 			b := make([]byte, 300<<20)
 			for i := 0; i < len(b); i += 4096 {
 				b[i] = 1
 			}
+			mu.Lock()
 			keep = append(keep, b)
+			mu.Unlock()
 			<-ch
 			return otto.UndefinedValue()
 		})
 	}
 	var once sync.Once
-	release = func() { once.Do(func() { close(ch); vmHook = nil }) }
+	release = func() {
+		once.Do(func() {
+			close(ch)
+			vmHook = nil
+			mu.Lock()
+			keep = nil
+			mu.Unlock()
+		})
+	}
 	t.Cleanup(release)
 	// Collect earlier tests' garbage first. The memory guard measures heap growth
 	// for the whole process, and a collection during hog() would otherwise hide
@@ -380,5 +405,65 @@ func TestMemoryStopInBlockedBuiltinIsAbandoned(t *testing.T) {
 	_, err = s.FindProxyForURL("https://alks.example.test/", 10*time.Second)
 	if !errors.Is(err, ErrMemory) || !errors.Is(err, ErrAbandoned) {
 		t.Fatalf("got %v, want ErrMemory wrapping ErrAbandoned", err)
+	}
+}
+
+// Sam's review: a valid-sized PAC file with deep bracket nesting must be rejected
+// before otto's parser can overflow the Go stack (fatal at about 225,000 levels).
+func TestDeepNestingIsRejected(t *testing.T) {
+	deep := "function FindProxyForURL(u, h) { return " + strings.Repeat("(", 200000) + "1" + strings.Repeat(")", 200000) + "; }"
+	if len(deep) >= MaxSize {
+		t.Fatalf("test script is %d bytes, want it under MaxSize", len(deep))
+	}
+	if _, err := Compile(deep, time.Second); err == nil || !strings.Contains(err.Error(), "nests brackets") {
+		t.Fatalf("got %v, want the nesting error", err)
+	}
+	over := "function FindProxyForURL(u, h) { return " + strings.Repeat("[", maxNesting+1) + strings.Repeat("]", maxNesting+1) + "; }"
+	if _, err := Compile(over, time.Second); err == nil {
+		t.Fatal("nesting just over the limit was accepted")
+	}
+	// Brackets inside strings and comments do not count.
+	ok := "// ((((((((\n/* [[[[[[[[ */ function FindProxyForURL(u, h) { var s = \"((((\\\"((((\"; var t = '[[[['; return 'DIRECT'; }"
+	if d := nestingDepth(ok); d != 1 {
+		t.Fatalf("nestingDepth = %d, want 1 (the function body)", d)
+	}
+	if _, err := Compile(ok, time.Second); err != nil {
+		t.Fatalf("ordinary script rejected: %v", err)
+	}
+	if _, err := Compile(load(t, "pac-zscaler-like.js"), time.Second); err != nil {
+		t.Fatalf("Zscaler-like PAC rejected: %v", err)
+	}
+}
+
+// Sam's review: the heap check is process-wide, so evaluations run one at a time;
+// a memory-heavy script started first does not stop a healthy one started 30 ms
+// later.
+func TestMemoryHeavyEvaluationDoesNotStopAHealthyOne(t *testing.T) {
+	waitIdle(t)
+	defer blockingHelpers(t)()
+	// Grows 16 MiB per step with a short loop between steps, so it takes most of a
+	// second to pass the limit and overlaps the healthy evaluation.
+	bomb, err := Compile("function FindProxyForURL(u, h) { while (true) { grow(); for (var i = 0; i < 50000; i++) {} } }", time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The healthy script runs for over a second, so that without one-at-a-time
+	// evaluation it would overlap the memory-heavy one and see its heap growth.
+	healthy, err := Compile("function FindProxyForURL(u, h) { for (var i = 0; i < 1500000; i++) {} return 'PROXY 127.0.0.1:9000'; }", 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bombErr := make(chan error, 1)
+	go func() {
+		_, err := bomb.FindProxyForURL("https://alks.example.test/", 10*time.Second)
+		bombErr <- err
+	}()
+	time.Sleep(30 * time.Millisecond)
+	answer, err := healthy.FindProxyForURL("https://alks.example.test/", 10*time.Second)
+	if err != nil || answer != "PROXY 127.0.0.1:9000" {
+		t.Fatalf("healthy evaluation: got %q, %v", answer, err)
+	}
+	if err := <-bombErr; !errors.Is(err, ErrMemory) {
+		t.Fatalf("memory-heavy evaluation: got %v, want ErrMemory", err)
 	}
 }
